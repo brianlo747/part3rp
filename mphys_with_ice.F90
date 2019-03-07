@@ -10,7 +10,6 @@ module mphys_with_ice
 
    implicit none
 
-   public hi
    !public init, rho_f, dqr_dt__autoconversion
 
    contains
