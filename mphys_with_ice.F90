@@ -583,13 +583,29 @@ module mphys_with_ice
      real(kreal), parameter :: N_0h = 1.21e4_kreal  ! [m^-4]
      real(kreal), parameter :: rho0 = 1.12_kreal
      real(kreal), parameter :: rho_h = 470.0_kreal
+     real(kreal), parameter :: g = 9.80665_kreal
+     real(kreal), parameter :: r4_3 = 4.0_kreal / 3.0_kreal
+     real(kreal), parameter :: r1_3 = 1.0_kreal / 3.0_kreal
+     real(kreal), parameter :: r1_2 = 1.0_kreal / 2.0_kreal
+     real(kreal), parameter :: C_Dr = 0.54_kreal
+     real(kreal), parameter :: C_Dh = 0.6_kreal
+     real(kreal), parameter :: k_2 = 8.0_kreal
 
-     real(kreal) :: lambda_r, lambda_h, wr, wh, f
+     real(kreal) :: lambda_r, lambda_h, wr1, wr2, wr3, wh1, wh2, wh3, f, &
+     r_r, r_h, wr, wh
 
+     r_r = (qr*rho/(r4_3*pi*N_0r*rho_l))**r1_3
+     r_h = (qh*rho/(r4_3*pi*N_0h*rho_h))**r1_3
      lambda_h = (8.0_kreal*rho_h*N_0h/(qh*rho))**0.25_kreal
      lambda_r = (8.0_kreal*pi*(rho_l)/(qr*rho_g)*N_0r)**(0.25_kreal)
-     wr = 0 !TODO: Correct this
-     wh = 0 !TODO: Correct this
+     wr1 = 2.0_kreal * rho_l * g * r_r**2
+     wr2 = k_2 * rho_l * (rho/rho_g)**r1_2 * r_r
+     wr3 = (8.0_kreal*rho_g*g/(3*C_Dr*rho_g))**r1_2
+     wr = min(wr1,min(wr2,wr3))
+     wh1 = 2.0_kreal * rho_h * g * r_h**2
+     wh2 = k_2 * rho_l * (rho/rho_g)**r1_2 * r_r
+     wh3 = (8.0_kreal*rho_g*g/(3*C_Dh*rho_g))**r1_2
+     wh = min(wh1,min(wh2,wh3))
      f = ((5.0_kreal/(lambda_r**6 * lambda_h)) + &
      (2.0_kreal/(lambda_r**5 * lambda_h**2)) + &
      (0.5_kreal/(lambda_r**4 * lambda_h**3)))
