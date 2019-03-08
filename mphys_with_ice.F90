@@ -684,4 +684,39 @@ module mphys_with_ice
      endif
    end function
 
+   pure function dqi_dt__freezing_graupel(qh, rho, T)
+     use microphysics_constants, only: pi, T0, rho_l => rho_w
+
+     real(kreal), intent(in) :: qh, rho, T
+     real(kreal) :: dqi_dt__freezing_graupel
+     real(kreal), parameter :: rho_h = 470.0_kreal
+     real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
+     real(kreal), parameter :: N_0h = 1.21e4_kreal  ! [m^-4]
+     real(kreal), parameter :: A_prime = 0.66_kreal  ! [m^-4]
+     real(kreal), parameter :: B_prime = 100.0_kreal  ! [m^-4]
+
+     real(kreal) :: lambda_h
+     lambda_h = (8.0_kreal*rho_h*N_0h/(qh*rho))**0.25_kreal
+
+     dqi_dt__freezing_graupel = 1280.0_kreal/lambda_h**7.0_kreal * pi**2 * &
+     B_prime * N_0r * (EXP(A_prime*(T0-T))-1.0_kreal) * rho_l/rho
+   end function
+
+   pure function dqh_dt__freezing_ice(ql, rho, T)
+     use microphysics_constants, only: pi, T0, rho_l => rho_w
+
+     real(kreal), intent(in) :: ql, rho, T
+     real(kreal) :: dqh_dt__freezing_ice
+     real(kreal), parameter :: N_c = 200*1.0e6_kreal  ! [m^-4]
+     real(kreal), parameter :: A_prime = 0.66_kreal  ! [m^-4]
+     real(kreal), parameter :: B_prime = 100.0_kreal  ! [m^-4]
+     real(kreal), parameter :: r4_3 = 4.0_kreal / 3.0_kreal
+     real(kreal), parameter :: r1_3 = 1.0_kreal / 3.0_kreal
+
+     real(kreal) :: r_c
+     r_c = (ql*rho/(r4_3*pi*N_c*rho_l))**r1_3
+
+     dqh_dt__freezing_ice = 16.0_kreal/9.0_kreal * pi**2 * r_c**6 * &
+     B_prime * N_c * (EXP(A_prime*(T0-T))-1.0_kreal) * rho_l/rho
+   end function
 end module mphys_with_ice
