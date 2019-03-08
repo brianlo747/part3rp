@@ -406,7 +406,7 @@ module mphys_with_ice
 
      real(kreal) :: k_i
 
-     k_i = 1.0e-3_kreal * EXP(0.025_kreal * (T - T0))
+     k_i = 1.0e-3_kreal * EXP(0.025_kreal * (T - T0)) !TODO: Check T dependence
 
      ! TODO: what happens if ql < qg ?
      dqh_dt__autoconversion_ice_graupel = k_i*(qi - qg/rho_g*a_i)
@@ -443,7 +443,7 @@ module mphys_with_ice
       endif
    end function
 
-   pure function dqh_dt__accretion_ice_graupel(qi, rho_g, qh, T)
+   pure function dqh_dt__accretion_ice_graupel(qi, rho_g, qh, T) !TODO Rate too large!
      ! Equation 19
      use microphysics_constants, only: pi, rho_l => rho_w
 
@@ -477,7 +477,7 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqh_dt__accretion_cloud_graupel_rain(ql, rho_g, rho, qh)
+   pure function dqh_dt__accretion_cloud_graupel_rain(ql, rho_g, rho, qh) !TODO: Rate too big as well?
      !Equation 20
      use microphysics_constants, only: pi, rho_l => rho_w
 
@@ -508,7 +508,7 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr)
+   pure function dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr) !TODO: Rate too big as well?
      !Equation 21
      use microphysics_constants, only: pi, rho_l => rho_w
 
@@ -538,7 +538,7 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqr_dt__accretion_ice_rain_graupel_r(qi, ql, rho, rho_g, qr)
+   pure function dqr_dt__accretion_ice_rain_graupel_r(qi, ql, rho, rho_g, qr) !TODO: Rate too big as well, defaulting to min?
      !Equation 21
      use microphysics_constants, only: pi, rho_l => rho_w
 
@@ -573,7 +573,7 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqr_dt__accretion_graupel(qg, rho_g, qv, qh, rho, T, p, qr)
+   pure function dqr_dt__accretion_graupel(qg, rho_g, qv, qh, rho, T, p, qr) !TODO: Confirm no T dep?
 
      use microphysics_constants, only: pi, rho_l => rho_w
 
@@ -613,7 +613,7 @@ module mphys_with_ice
      N_0r * N_0h * ABS(wr - wh)*f
    end function
 
-   pure function dqr_dt__melting_graupel(qg, rho_g, qv, qh, rho, T, p, qr, ql)
+   pure function dqr_dt__melting_graupel(qg, rho_g, qv, qh, rho, T, p, qr, ql) !TODO: Check negative sign
      use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
      use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
      use microphysics_common, only: Ka_f => thermal_conductivity
@@ -684,7 +684,7 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqi_dt__freezing_graupel(qh, rho, T)
+   pure function dqi_dt__freezing_graupel(qh, rho, T) !TODO: Check negative sign
      use microphysics_constants, only: pi, T0, rho_l => rho_w
 
      real(kreal), intent(in) :: qh, rho, T
@@ -702,7 +702,7 @@ module mphys_with_ice
      B_prime * N_0r * (EXP(A_prime*(T0-T))-1.0_kreal) * rho_l/rho
    end function
 
-   pure function dqh_dt__freezing_ice(ql, rho, T)
+   pure function dqh_dt__freezing_ice(ql, rho, T) !TODO: Check negative sign
      use microphysics_constants, only: pi, T0, rho_l => rho_w
 
      real(kreal), intent(in) :: ql, rho, T
