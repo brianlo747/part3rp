@@ -72,11 +72,6 @@ module mphys_with_ice
    !
    ! end function
 
-   pure function hi()
-     real(kreal) :: hi
-     hi = 0
-   end function
-
    pure function rho_f(qd, qv, ql, qr, qi, qh, p, temp) result(rho)
       use microphysics_constants, only: R_v, R_d, rho_i, rho_l => rho_w
 
@@ -465,9 +460,9 @@ module mphys_with_ice
      if (qh .eq. 0.0_kreal) then
         dqh_dt__accretion_ice_graupel = 0.0_kreal
      else
-        l_h = (rho_h/(qh*rho_g)*N_0h)**(0.25_kreal)
+        l_h = (8.0_kreal * pi * rho_h/(qh*rho_g)*N_0h)**(0.25_kreal)
 
-        E_hi = EXP(0.05_kreal * (T - T_0))
+        E_hi = min(1.0_kreal, EXP(0.05_kreal * (T - T_0)))
 
         dqh_dt__accretion_ice_graupel = pi*E_hi*N_0h*a_h*rho_h * &
         (rho0/rho_g)**0.5_kreal*G3p5*l_h**(-3.5_kreal)*qi
@@ -498,7 +493,7 @@ module mphys_with_ice
      if (qh .eq. 0.0_kreal) then
         dqh_dt__accretion_cloud_graupel_rain = 0.0_kreal
      else
-        l_h = (8.0_kreal*rho_h*N_0h/(qh*rho))**0.25_kreal
+        l_h = (8.0_kreal*pi*rho_h*N_0h/(qh*rho))**0.25_kreal
 
         dqh_dt__accretion_cloud_graupel_rain = pi*N_0h*a_h*rho_h * &
         (rho0/rho_g)**0.25_kreal*G3p5*l_h**(-3.5_kreal)*ql
@@ -547,6 +542,7 @@ module mphys_with_ice
 
      real(kreal), parameter :: G3p5 = 3.32399614155_kreal  ! = Gamma(3.5)
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
+     real(kreal), parameter :: Nc = 200*1.0e6_kreal
      real(kreal), parameter :: a_r = 201.0_kreal  ! [m^.5 s^-1]
      real(kreal), parameter :: rho0 = 1.12_kreal
      real(kreal), parameter :: r4_3 = 4.0_kreal/3.0_kreal
@@ -555,7 +551,7 @@ module mphys_with_ice
      real(kreal) :: lambda_r, r_c
 
      ! Radius of cloud droplet
-     r_c = (ql*rho/(r4_3*pi*N_0r*rho_l))**r1_3
+     r_c = (ql*rho/(r4_3*pi*Nc*rho_l))**r1_3
 
      ! If there is no rain available to perform accretion there is no need to calculate the accretion rate (also avoids
      ! divide-by-zero, see https://github.com/leifdenby/unified-microphysics/issues/5)
@@ -568,8 +564,8 @@ module mphys_with_ice
         dqr_dt__accretion_ice_rain_graupel_r = lambda_r/N_0r * &
         (3.0_kreal/(4.0_kreal*pi*r_c**3.0_kreal)) * &
         dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr)
-        dqr_dt__accretion_ice_rain_graupel_r = min(1.0_kreal, &
-        dqr_dt__accretion_ice_rain_graupel_r)
+        !dqr_dt__accretion_ice_rain_graupel_r = min(1.0_kreal, &
+        !dqr_dt__accretion_ice_rain_graupel_r)
      endif
    end function
 
