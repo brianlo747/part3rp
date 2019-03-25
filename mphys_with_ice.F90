@@ -465,7 +465,7 @@ module mphys_with_ice
         E_hi = min(1.0_kreal, EXP(0.05_kreal * (T - T_0)))
 
         dqh_dt__accretion_ice_graupel = pi*E_hi*N_0h*a_h*rho_h * &
-        (rho0/rho_g)**0.5_kreal*G3p5*l_h**(-3.5_kreal)*qi
+        (rho0/rho_g)**0.5_kreal*G3p5/l_h**3.5_kreal * qi
 
         dqh_dt__accretion_ice_graupel = max(0.0_kreal, &
         dqh_dt__accretion_ice_graupel)
@@ -542,16 +542,16 @@ module mphys_with_ice
 
      real(kreal), parameter :: G3p5 = 3.32399614155_kreal  ! = Gamma(3.5)
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
-     real(kreal), parameter :: Nc = 200*1.0e6_kreal
+     real(kreal), parameter :: Ni = 200*1.0e6_kreal
      real(kreal), parameter :: a_r = 201.0_kreal  ! [m^.5 s^-1]
      real(kreal), parameter :: rho0 = 1.12_kreal
      real(kreal), parameter :: r4_3 = 4.0_kreal/3.0_kreal
      real(kreal), parameter :: r1_3 = 1.0_kreal/3.0_kreal
 
-     real(kreal) :: lambda_r, r_c
+     real(kreal) :: lambda_r, r_i
 
      ! Radius of cloud droplet
-     r_c = (ql*rho/(r4_3*pi*Nc*rho_l))**r1_3
+     r_i = (ql*rho/(r4_3*pi*Ni*rho_l))**r1_3
 
      ! If there is no rain available to perform accretion there is no need to calculate the accretion rate (also avoids
      ! divide-by-zero, see https://github.com/leifdenby/unified-microphysics/issues/5)
@@ -562,7 +562,7 @@ module mphys_with_ice
         lambda_r = (8.0_kreal*pi*rho_l/(qr*rho)*N_0r)**(0.25_kreal)
 
         dqr_dt__accretion_ice_rain_graupel_r = lambda_r/N_0r * &
-        (3.0_kreal/(4.0_kreal*pi*r_c**3.0_kreal)) * &
+        (3.0_kreal/(4.0_kreal*pi*r_i**3.0_kreal)) * &
         dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr)
         !dqr_dt__accretion_ice_rain_graupel_r = min(1.0_kreal, &
         !dqr_dt__accretion_ice_rain_graupel_r)
@@ -680,6 +680,9 @@ module mphys_with_ice
      endif
    end function
 
+   pure function dqr_dt__melting_ice(qg, rho_g, qv, qh, rho, T, p, qr, ql) !TODO: Fix from graupel to ice!
+   end function
+
    pure function dqi_dt__freezing_graupel(qh, rho, T) !TODO: Check negative sign
      use microphysics_constants, only: pi, T0, rho_l => rho_w
 
@@ -692,9 +695,9 @@ module mphys_with_ice
      real(kreal), parameter :: B_prime = 100.0_kreal  ! [m^-4]
 
      real(kreal) :: lambda_h
-     lambda_h = (8.0_kreal*rho_h*N_0h/(qh*rho))**0.25_kreal
+     lambda_h = (8.0_kreal*pi*rho_h*N_0h/(qh*rho))**0.25_kreal
 
-     dqi_dt__freezing_graupel = 1280.0_kreal/lambda_h**7.0_kreal * pi**2 * &
+     dqi_dt__freezing_graupel = -1280.0_kreal/lambda_h**7.0_kreal * pi**2 * &
      B_prime * N_0r * (EXP(A_prime*(T0-T))-1.0_kreal) * rho_l/rho
    end function
 
@@ -712,7 +715,7 @@ module mphys_with_ice
      real(kreal) :: r_c
      r_c = (ql*rho/(r4_3*pi*N_c*rho_l))**r1_3
 
-     dqh_dt__freezing_ice = 16.0_kreal/9.0_kreal * pi**2 * r_c**6 * &
+     dqh_dt__freezing_ice = -16.0_kreal/9.0_kreal * pi**2 * r_c**6 * &
      B_prime * N_c * (EXP(A_prime*(T0-T))-1.0_kreal) * rho_l/rho
    end function
 end module mphys_with_ice
