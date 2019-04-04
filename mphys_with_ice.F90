@@ -271,7 +271,7 @@ module mphys_with_ice
    end function
 
    pure function dqi_dt__sublimation_deposition(qi, rho, T, p) ! TODO: Check sat pressure!!
-     use microphysics_constants, only: pi, rho_i
+     use microphysics_constants, only: pi, rho_i, T0
      use microphysics_constants, only: Ls => L_subl, R_v
      use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
      use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
@@ -284,18 +284,18 @@ module mphys_with_ice
      real(kreal), parameter :: m_i = 1.0e-12_kreal
      real(kreal), parameter :: N_0f = 1.0e-2_kreal
      real(kreal), parameter :: beta = 0.6_kreal
-     real(kreal), parameter :: T_0 = 273.15_kreal
+     !real(kreal), parameter :: T_0 = 273.15_kreal
      real(kreal), parameter :: r4_3 = 4.0_kreal/3.0_kreal
      real(kreal), parameter :: r1_3 = 1.0_kreal/3.0_kreal
 
      real(kreal) :: N_f, Dv, Fd_prime, Fk_prime, Ka, qi_sat, pv_sat, Si
      real(kreal) :: r_i
 
-     if (qi == 0.0) then
+     if (qi == 0.0 .OR. T > T0) then
         dqi_dt__sublimation_deposition = 0.0_kreal
      else
 
-       N_f = N_0f * EXP(beta * (T_0 - T)) ! Cooper parameterisation
+       N_f = N_0f * EXP(beta * (T0 - T)) ! Cooper parameterisation
 
        r_i = (qi*rho/(r4_3*pi*N_f*rho_i))**r1_3
 
@@ -401,12 +401,17 @@ module mphys_with_ice
 
      real(kreal) :: k_i
 
-     k_i = 1.0e-3_kreal * EXP(0.025_kreal * (T - T0)) !TODO: Check T dependence
+     if (qi == 0.0 .OR. T > T0) then
+       dqh_dt__autoconversion_ice_graupel  = 0.0_kreal
 
-     ! TODO: what happens if ql < qg ?
-     dqh_dt__autoconversion_ice_graupel = k_i*(qi - qg/rho_g*a_i)
-     dqh_dt__autoconversion_ice_graupel = max(0.0_kreal, &
-     dqh_dt__autoconversion_ice_graupel)
+     else
+       k_i = 1.0e-3_kreal * EXP(0.025_kreal * (T - T0)) !TODO: Check T dependence
+
+       ! TODO: what happens if ql < qg ?
+       dqh_dt__autoconversion_ice_graupel = k_i*(qi - qg/rho_g*a_i)
+       dqh_dt__autoconversion_ice_graupel = max(0.0_kreal, &
+       dqh_dt__autoconversion_ice_graupel)
+     endif
    end function
 
    pure function dqr_dt__accretion_cloud_rain(ql, rho_g, qr)
@@ -681,6 +686,71 @@ module mphys_with_ice
    end function
 
    pure function dqr_dt__melting_ice(qg, rho_g, qv, qh, rho, T, p, qr, ql) !TODO: Fix from graupel to ice!
+     use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
+     use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
+     use microphysics_common, only: Ka_f => thermal_conductivity
+     use microphysics_common, only: Dv_f => water_vapour_diffusivity
+     use microphysics_common, only: dyn_visc_f => dynamic_viscosity
+     use microphysics_constants, only: Lv => L_cond, Lf => L_fusi, R_v
+     use microphysics_constants, only: cp_l, pi, rho_l => rho_w
+
+     real(kreal), intent(in) :: qg, rho_g, qv, qh, rho, T, p, qr, ql
+     real(kreal) :: dqr_dt__melting_ice
+
+     real(kreal), parameter :: G2p75 = 1.608359421985546_kreal ! = Gamma(2.75)
+
+     ! droplet-size distribution constant
+     real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
+     real(kreal), parameter :: Ni = 200*1.0e6_kreal
+
+     ! fall-speed coefficient taken from the r > 0.5mm expression for
+     ! fall-speed from Herzog '98
+     real(kreal), parameter :: a_r = 201._kreal
+     real(kreal), parameter :: a_h = 174.7_kreal  ! [m^.5 s^-1]
+     ! reference density
+     real(kreal), parameter :: rho0 = 1.12_kreal
+     real(kreal), parameter :: rho_h = 470.0_kreal
+     real(kreal), parameter :: T_0 = 273.15_kreal
+
+     real(kreal) :: pv_sat, qv_sat, Sw, l_h, l_r
+     real(kreal) :: Dv, Fd
+     real(kreal) :: Ka, Fk
+     real(kreal) :: nu, f1, f2, f3
+     !real(kreal) :: dqh_dt__accretion_cloud_graupel, dqr_dt__accretion_graupel
+
+     ! can't do cond/evap without any rain-droplets present
+     if (qr == 0.0) then
+        dqr_dt__melting_ice = 0.0_kreal
+     else
+        ! computer super/sub-saturation
+        qv_sat = qv_sat_f(T, p)
+        Sw = qv/qv_sat
+
+        ! size-distribtion length-scale
+        l_r = (8.0_kreal*pi*(rho_l)/(qr*rho_g)*N_0r)**(0.25_kreal)
+
+        ! air condutivity and diffusion effects
+        Ka = Ka_f(T)
+        Fk = (Lv/(R_v*T) - 1.0_kreal)*Lv/(Ka*T)*rho_l
+
+        pv_sat = pv_sat_f(T)
+        Dv = Dv_f(T, p)
+        Fd = R_v*T/(pv_sat*Dv)*rho_l
+
+        ! compute the ventilation coefficient `f`
+        ! dynamic viscosity
+        nu = dyn_visc_f(T=T) / rho
+
+        f1 = Ka * (T - T_0) + Lv * Dv * (qv - qv_sat)
+        f2 = 1.0_kreal / l_r**2.0_kreal
+        !f3 = (cp_l / Lf) * (T - T_0) * &
+        !(dqh_dt__accretion_cloud_graupel_rain(ql, rho_g, rho, qh) + &
+        ! dqr_dt__accretion_graupel(qg, rho_g, qv, qh, rho, T, p, qr))
+
+        ! compute rate of change of condensate from diffusion
+        dqr_dt__melting_ice = (qg/rho_g) * Ni * (2 * pi / Lf) &
+        * f1 * f2
+     endif
    end function
 
    pure function dqi_dt__freezing_graupel(qh, rho, T) !TODO: Check negative sign

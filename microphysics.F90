@@ -30,7 +30,8 @@ module microphysics
 
 contains
    subroutine init(microphysics_implementation, ntgas_mp, ntrac_mp)
-      use microphysics_register, only: n_compressible_species, n_incompressible_species
+      !use microphysics_register, only: n_compressible_species, n_incompressible_species
+      integer :: n_compressible_species = 1, n_incompressible_species = 4
 
       character(len=*), intent(in) :: microphysics_implementation
       integer, intent(out) :: ntgas_mp, ntrac_mp
@@ -74,7 +75,7 @@ contains
    ! `granew`: graupel
 
    subroutine assign_atham_pointers()
-      use microphysics_register, only: idx_cwater, idx_water_vapour, idx_rain, idx_cice, idx_graupel
+      !use microphysics_register, only: idx_cwater, idx_water_vapour, idx_rain, idx_cice, idx_graupel
       use microphysics_register, only: cp_species, cv_species
 
       use process_data, only: wetnew, watcnew, watpnew, icenew, granew, &
@@ -299,8 +300,10 @@ contains
       use atham_module,   only: itrac_movie, ntrac_movie, var_trac_movie, des_trac_movie
       use atham_module,   only: itpas_movie, ntpas_movie, var_tpas_movie, des_tpas_movie
 
-      use microphysics_register, only: idx_cwater, idx_water_vapour
-      use microphysics_register, only: idx_rain, idx_cice, idx_graupel
+      !use microphysics_register, only: idx_cwater, idx_water_vapour
+      !use microphysics_register, only: idx_rain, idx_cice, idx_graupel
+      integer :: idx_cwater = 3, idx_water_vapour = 5
+      integer :: idx_rain = 4, idx_cice = 6, idx_graupel = 7
 
       character(len=*), intent(in) :: var_name
       character(len=*), intent(in) :: var_name_output
@@ -411,9 +414,13 @@ contains
       use atham_module, only: iflgs
       use atham_module, only: tetflx, pflx
 
-      use microphysics_register, only: n_variables, q_species_flag
-      use microphysics_register, only: idx_water_vapour, idx_temp, idx_pressure
-      use microphysics_register, only: idx_graupel, idx_cwater, idx_rain, idx_cice
+      !use microphysics_register, only: n_variables, q_species_flag
+      !use microphysics_register, only: idx_water_vapour, idx_temp, idx_pressure
+      !use microphysics_register, only: idx_graupel, idx_cwater, idx_rain, idx_cice
+      integer :: idx_cwater = 3, idx_water_vapour = 5
+      integer :: idx_rain = 4, idx_cice = 6, idx_graupel = 7
+      integer :: n_variables = 7
+
       use microphysics_common, only: cp_gas, cv_gas, cp_mixture, cv_mixture
       use microphysics_integration, only: integrate_microphysics => integrate
       !use mphys_kessler_old, only: integrate_microphysics => integrate

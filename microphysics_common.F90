@@ -6,6 +6,7 @@ module microphysics_common
    public thermal_conductivity
 
    contains
+
       pure function thermal_conductivity(temp)
          use microphysics_constants, only: T0, a_K, b_K
 
@@ -89,26 +90,56 @@ module microphysics_common
       !   cv_gas = (cv_d*q_d + cv_v*y(idx_water_vapour))/(q_d + y(idx_water_vapour))
       !end function
 
-      !pure function cv_mixture(y)
-      !   use microphysics_register, only: n_variables, cv_species, q_species_flag
-      !   use microphysics_constants, only: cv_d
-      !   real(kreal), dimension(n_variables), intent(in) :: y
-      !   real(kreal) :: cv_mixture, q_d
+      pure function cv_mixture(y)
+         !use microphysics_register, only: n_variables, cv_species, q_species_flag
+         !use microphysics_constants, only: cv_d
+         use microphysics_constants, only: cv_d, cv_v, cv_l, cv_i
+         integer, parameter :: n_variables = 7
+         real, dimension (1 : n_variables) :: cv_species
 
-      !   q_d = 1.0_kreal - sum(y*q_species_flag)
+         real(kreal), dimension(n_variables), intent(in) :: y
+         real(kreal) :: cv_mixture, q_d
 
-      !   cv_mixture = cv_d*q_d + sum(y*cv_species)
-      !end function cv_mixture
+         ! Allocate and define cv_species array
+         cv_species(1) = 0.0
+         cv_species(2) = 0.0
+         cv_species(3) = cv_l
+         cv_species(4) = cv_l
+         cv_species(5) = cv_v
+         cv_species(6) = cv_i
+         cv_species(7) = cv_i
 
-      !pure function cp_mixture(y)
-      !   use microphysics_register, only: n_variables, cp_species, q_species_flag
-      !   use microphysics_constants, only: cp_d
-      !   real(kreal), dimension(n_variables), intent(in) :: y
-      !   real(kreal) :: cp_mixture, q_d
+         !q_d = 1.0_kreal - sum(y*q_species_flag)
+         q_d = 1.0_kreal - sum(y)
 
-      !   q_d = 1.0_kreal - sum(y*q_species_flag)
+         !cv_mixture = cv_d*q_d + sum(y*cv_species)
+         cv_mixture = cv_d*q_d + sum(y)
+      end function cv_mixture
 
-      !   cp_mixture = cp_d*q_d + sum(y*cp_species)
-      !end function cp_mixture
+      pure function cp_mixture(y)
+         !use microphysics_register, only: n_variables, cp_species, q_species_flag
+         !use microphysics_constants, only: cp_d
+         use microphysics_constants, only: cp_d, cp_v, cp_l, cp_i
+         integer, parameter :: n_variables = 7
+         real, dimension (1 : n_variables) :: cp_species
+
+         real(kreal), dimension(n_variables), intent(in) :: y
+         real(kreal) :: cp_mixture, q_d
+
+         ! Allocate and define cv_species array
+         cp_species(1) = 0.0
+         cp_species(2) = 0.0
+         cp_species(3) = cp_l
+         cp_species(4) = cp_l
+         cp_species(5) = cp_v
+         cp_species(6) = cp_i
+         cp_species(7) = cp_i
+
+         !q_d = 1.0_kreal - sum(y*q_species_flag)
+         q_d = 1.0_kreal - sum(y)
+
+         !cp_mixture = cp_d*q_d + sum(y*cp_species)
+         cp_mixture = cp_d*q_d + sum(y)
+      end function cp_mixture
 
 end module microphysics_common

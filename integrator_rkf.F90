@@ -69,8 +69,6 @@ contains
   end subroutine integrate_with_message
 
 
-
-
   recursive subroutine rkf34_original(dydx, y, fix_y, x, dx, msg, m)
     character(len=100), intent(out) :: msg
     real(8), intent(inout) :: dx
@@ -206,7 +204,7 @@ contains
 
       ! TODO: make abs_tol and rel_tol vectors
       max_total_err = (abs_tol + rel_tol*abs(y))
-      s = 0.84*(minval(max_total_err/abs_err, abs_err > 0.0))**0.2
+      s = 0.84*(minval(max_total_err/abs_err, abs_err > 0.0))**0.25
 
       if (any(y_n2 < 0.0)) then
         !msg = "Solution became negative"

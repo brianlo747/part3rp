@@ -47,6 +47,7 @@ module microphysics_constants
    ! density of water [kg/m3]
    real(kreal), parameter :: rho_w = 1.0e3_kreal
    real(kreal), parameter :: rho_i = 500._kreal
+   real(kreal), parameter :: rho_h = 470._kreal
 
    real(kreal), parameter :: T0 = 273.15_kreal
    real(kreal), parameter :: epsmach = 1.0e-15_kreal
