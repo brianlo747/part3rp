@@ -41,7 +41,6 @@ contains
     m_total = 0
 
     call integrate_isometric(y, t0, t_end, msg, m_total, n_variables)
-    print *, y
 
     if (present(msg_out)) then
       !TODO: when calling from ATHAM this "optional" value is set although

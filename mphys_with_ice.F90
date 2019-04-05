@@ -566,9 +566,10 @@ module mphys_with_ice
      else
         lambda_r = (8.0_kreal*pi*rho_l/(qr*rho)*N_0r)**(0.25_kreal)
 
-        dqr_dt__accretion_ice_rain_graupel_r = lambda_r/N_0r * &
+        dqr_dt__accretion_ice_rain_graupel_r = min(1.0, &
+        lambda_r/N_0r * &
         (3.0_kreal/(4.0_kreal*pi*r_i**3.0_kreal)) * &
-        dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr)
+        dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr))
         !dqr_dt__accretion_ice_rain_graupel_r = min(1.0_kreal, &
         !dqr_dt__accretion_ice_rain_graupel_r)
      endif
@@ -767,8 +768,9 @@ module mphys_with_ice
      real(kreal) :: lambda_h
      lambda_h = (8.0_kreal*pi*rho_h*N_0h/(qh*rho))**0.25_kreal
 
-     dqi_dt__freezing_graupel = -1280.0_kreal/lambda_h**7.0_kreal * pi**2 * &
-     B_prime * N_0r * (EXP(A_prime*(T0-T))-1.0_kreal) * rho_l/rho
+     dqi_dt__freezing_graupel = min(1.0, &
+     1280.0_kreal/lambda_h**7.0_kreal * pi**2 * &
+     B_prime * N_0r * (EXP(A_prime*(T0-T))-1.0_kreal) * rho_l/rho)
    end function
 
    pure function dqh_dt__freezing_ice(ql, rho, T) !TODO: Check negative sign
@@ -785,7 +787,7 @@ module mphys_with_ice
      real(kreal) :: r_c
      r_c = (ql*rho/(r4_3*pi*N_c*rho_l))**r1_3
 
-     dqh_dt__freezing_ice = -16.0_kreal/9.0_kreal * pi**2 * r_c**6 * &
+     dqh_dt__freezing_ice = 16.0_kreal/9.0_kreal * pi**2 * r_c**6 * &
      B_prime * N_c * (EXP(A_prime*(T0-T))-1.0_kreal) * rho_l/rho
    end function
 end module mphys_with_ice
