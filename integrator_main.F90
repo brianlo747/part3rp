@@ -41,7 +41,7 @@ contains
     msg = " "
     m_total = 0
 
-    call integrate_with_message(y, t0, t_end, msg_out, m_total)
+    call integrate_with_message(y, t0, t_end, msg, m_total)
 
     if (present(msg_out)) then
       !TODO: when calling from ATHAM this "optional" value is set although
