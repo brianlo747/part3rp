@@ -2,7 +2,7 @@ module integrator_main
   use microphysics_constants, only: kreal
   use microphysics_constants, only: abs_tol => integration_abs_tol, rel_tol => integration_rel_tol
   !use microphysics_register, only: n_variables
-  use integrator_helpers, only: integrate_isometric
+  use integrator_rkf, only: integrate_with_message
   !#ifdef MPI
   !use mpi !TODO: What is mpi
   !#endif
@@ -29,7 +29,7 @@ contains
     integer, parameter :: n_variables = 7
     real(8), intent(inout), dimension(n_variables) :: y
     real(8), intent(in) :: t_end, t0
-    character(len=100), optional :: msg_out
+    character(len=100), intent(inout), optional :: msg_out
     character(len=100) :: msg
     real(8) :: y0(size(y))
     integer :: mpi_rank, ierror
@@ -41,8 +41,7 @@ contains
     msg = " "
     m_total = 0
 
-    call integrate_isometric(y, t0, t_end, msg, m_total, n_variables)
-    call integrate_with_message(dydt_isometric, y, increment_state_isometric, t0, t_end, msg_out, m_total)
+    call integrate_with_message(y, t0, t_end, msg_out, m_total)
 
     if (present(msg_out)) then
       !TODO: when calling from ATHAM this "optional" value is set although

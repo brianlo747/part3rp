@@ -1,21 +1,22 @@
 module integrator_species_rate
   use mphys_with_ice
+  use microphysics_common, only: cv_mixture
 
   implicit none
 
   contains
-    pure function dydt_mphys_with_ice(t, y, c_m) result(dydt)
+    pure function dydt_mphys_with_ice(t, y) result(dydt)
        !use microphysics_register, only: idx_temp, idx_pressure
        !use microphysics_register, only: idx_cwater, idx_water_vapour, idx_rain, idx_cice, idx_graupel
        use microphysics_constants, only: temp0 => T0, L_v => L_cond, L_s => L_subl , L_f => L_fusi
        use mphys_with_ice
 
        real(kreal), dimension(:), intent(in) :: y
-       real(kreal), intent(in) :: t, c_m
+       real(kreal), intent(in) :: t
        real(kreal) :: dydt(size(y))
 
        real(kreal) :: ql, qv, qg, qr, qd, qi, qh
-       real(kreal) :: rho, rho_g
+       real(kreal) :: rho, rho_g, c_m
        real(kreal) :: dqldt_condevap, dqrdt_condevap, dqhdt_condevap
        real(kreal) :: dqidt_sublidep, dqhdt_sublidep
        real(kreal) :: dqrdt_autoconv, dqhdt_autoconv
@@ -44,6 +45,9 @@ module integrator_species_rate
        ! compute gas and mixture density using equation of state
        rho = rho_f(qd, qv, ql, qr, qi, qh, p, temp)
        rho_g = rho_f(qd, qv, 0.0_kreal, 0.0_kreal, 0.0_kreal, 0.0_kreal, p, temp)
+
+       ! compute heat capacity of mixture
+       c_m = cv_mixture(y)
 
        ! compute time derivatives for each process TODO: Functions for each function
 

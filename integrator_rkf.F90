@@ -1,38 +1,114 @@
 module integrator_rkf
   use microphysics_constants, only: kreal
   use microphysics_constants, only: abs_tol => integration_abs_tol, rel_tol => integration_rel_tol
+  use integrator_species_rate, only: dydt => dydt_mphys_with_ice
 
   implicit none
 
   public integrate_with_message
 
   logical, parameter :: debug = .true.
-  real(8), parameter :: dx_min = 1.0e-10
+  real(8), parameter :: dt_min = 1.0e-10
   integer, parameter :: max_steps = 10
 
 contains
   !> Outer loop on integrator that guarantees that we reach `t_end` and
   !> keeps checking `msg` to see if we have an error
-  subroutine integrate_with_message(dydt_f, y, fix_y, t0, t_end, msg, m_total)
+
+  !> Calculate density of mixture from equation of state
+  pure function density_eos(y) result(rho)
+    !use microphysics_register, only: idx_cwater, idx_water_vapour, idx_rain
+    !use microphysics_register, only: idx_temp, idx_pressure
+    use microphysics_constants, only: R_v, R_d, rho_h, rho_i, rho_l => rho_w
+
+    real(8), intent(in), dimension(:) :: y
+
+    real(8) :: temp, p, qd, qv, ql, qr, qi, qh
+    real(8) :: rho
+
+    temp = y(1)
+    p = y(2)
+
+    ql = y(3)
+    !if (idx_rain /= 0) then
+    qr = y(4)
+    !else
+    !  qr = 0.
+    !endif
+    qv = y(5)
+    qi = y(6)
+    qh = y(7)
+    qd = 1.0 - ql - qr - qv - qi - qh
+
+    rho = 1.0/( (qd*R_d + qv*R_v)*temp/p + (ql+qr)/rho_l + qi/rho_i + qh/rho_h )
+  end function density_eos
+
+  !> Compute pressure from equation of state.
+  ! Because state representation doesn't contain density (it is diagnosed)
+  ! we need to supply a density so that pressure can be calculated from the
+  ! other state variables
+  pure function pressure_eos(y, rho) result(p)
+    !use microphysics_register, only: idx_temp
+    !use microphysics_register, only: idx_cwater, idx_water_vapour, idx_rain
+    use microphysics_constants, only: R_v, R_d, rho_h, rho_i, rho_l => rho_w
+
+    real(8), intent(in) :: rho
+    real(8), intent(in), dimension(:) :: y
+
+    real(8) :: temp, qd, qv, ql, qr, qi, qh
+    real(8) :: p
+
+    temp = y(1)
+
+    ql = y(3)
+    !if (idx_rain /= 0) then
+    qr = y(4)
+    !else
+    !   qr = 0.
+    !endif
+    qv = y(5)
+    qi = y(6)
+    qh = y(7)
+    qd = 1.0 - ql - qr - qv - qi - qh
+
+    p = temp*(qd*R_d + qv*R_v)/(1./rho - (ql + qr)/rho_l - qi/rho_i - qh/rho_h)
+  end function pressure_eos
+
+  function fix_y_isometric(y, dy) result(y_new)
+    !use microphysics_register, only: idx_pressure
+
+    real(8), intent(in), dimension(:) :: y, dy
+    real(8) :: y_new(size(y)), rho_old
+
+    rho_old = density_eos(y)
+    y_new = y + dy
+
+    ! need to update pressure, since we assume constant volume density is
+    ! unchanged, use old density to calculate update pressure
+    y_new(2) = pressure_eos(y_new, rho_old)
+
+  end function fix_y_isometric
+
+  subroutine integrate_with_message(y, t0, t_end, msg, m_total)
     real(8), intent(inout), dimension(:) :: y
     real(8), intent(in) :: t_end, t0
     real(8) :: dt_s, t  ! sub-step timestep
     integer, intent(out) :: m_total
 
-    interface
-      function dydt_f(x, y)
-        real(8), intent(in) :: x
-        real(8), dimension(:), intent(in) :: y
-        real(8), dimension(size(y)) :: dydt_f
-      end function
-    end interface
+    ! interface
+    !   function dydt_f(x, y)
+    !     real(8), intent(in) :: x
+    !     real(8), dimension(:), intent(in) :: y
+    !     real(8), dimension(size(y)) :: dydt_f
+    !   end function
+    ! end interface
 
-    interface
-      function fix_y(y_old, dy)
-        real(8), dimension(:), intent(in) :: y_old, dy
-        real(8), dimension(size(dy)) :: fix_y
-      end function
-    end interface
+    ! interface
+    !   function fix_y(y_old, dy)
+    !     real(8), dimension(:), intent(in) :: y_old, dy
+    !     real(8), dimension(size(dy)) :: fix_y
+    !   end function
+    ! end interface
 
     character(len=100), intent(out) :: msg
     integer :: m
@@ -59,7 +135,7 @@ contains
       endif
 
       m = 0
-      call rkf34_original(dydt_f, y, fix_y, t, dt_s, msg, m)
+      call rkf34_original(y, t, dt_s, msg, m)
       m_total = m_total + m
 
       if (msg(1:1) /= " ") then
@@ -70,30 +146,15 @@ contains
   end subroutine integrate_with_message
 
 
-  recursive subroutine rkf34_original(dydx, y, fix_y, x, dx, msg, m)
+  recursive subroutine rkf34_original(y, t, dt, msg, m)
     character(len=100), intent(out) :: msg
-    real(8), intent(inout) :: dx
+    real(8), intent(inout) :: dt
     real(8), intent(inout), dimension(:) :: y
-    real(8), intent(inout) :: x
+    real(8), intent(inout) :: t
     integer, intent(in) :: m
 
-    interface
-      function dydx(x, y)
-        real(8), intent(in) :: x
-        real(8), dimension(:), intent(in) :: y
-        real(8), dimension(size(y)) :: dydx
-      end function
-    end interface
-
-    interface
-      function fix_y(y_old, dy)
-        real(8), dimension(:), intent(in) :: y_old, dy
-        real(8), dimension(size(dy)) :: fix_y
-      end function
-    end interface
-
     real(8) :: max_abs_err
-    real(8) :: dx_min__posdef
+    real(8) :: dt_min__posdef
     real(8) :: max_rel_err, err
 
     !f2py raise_python_exception msg
@@ -118,20 +179,20 @@ contains
 
     real(8), dimension(size(y)) :: k1, k2, k3, k4, k5
     real(8), dimension(size(y)) :: abs_err, y_n1, y_n2, rel_err
-    real(8), dimension(size(y)) :: dydx0, max_total_err
+    real(8), dimension(size(y)) :: dydt0, max_total_err
     real(8) :: s
 
     logical :: done = .false.
 
     if (debug) then
       print *, ""
-      print *, " -- substep -- m dt", m, dx
+      print *, " -- substep -- m dt", m, dt
       print *, 'y', y
     endif
 
     done = .false.
 
-    dydx0 = dydx(x, y)
+    dydt0 = dydt(t, y)
 
     ! TODO: use a vector for abs error here, so that we can have a
     ! different abs error for say specific concentration and temperature
@@ -144,34 +205,34 @@ contains
     !dx_min is delta_t_min
     !dx is delta_t
 
-    dx_min__posdef = minval(abs(y/dydx0), y /= 0.0_kreal)
-    if (dx_min__posdef > dx_min) then
-      if (dx > dx_min__posdef) then
+    dt_min__posdef = minval(abs(y/dydt0), y /= 0.0_kreal)
+    if (dt_min__posdef > dt_min) then
+      if (dt > dt_min__posdef) then
         if (debug) then
           print *, "Adjusting integration step down, too big to be pos def"
-          print *, "dx dx_min__posdef, m", dx, dx_min__posdef, m
+          print *, "dt dt_min__posdef, m", dt, dt_min__posdef, m
           print *, ""
         endif
-        s = 0.5*dx_min__posdef/dx
-        dx = s*dx
+        s = 0.5*dt_min__posdef/dt
+        dt = s*dt
         if (debug) then
           print *, "Initial timestep risks solution becoming negative, scaling timestep"
           print *, "by s=", s
-          print *, "dx_new", dx
+          print *, "dt_new", dt
         endif
       endif
     else
       if (debug) then
         print *, "Timestep required for pos def is very small so we just take a single forward"
         print *, "Euler step before runge-kutta integration"
-        print *, "dx dx_min, dx_min__posdef", dx, dx_min, dx_min__posdef
+        print *, "dt dt_min, dt_min__posdef", dt, dt_min, dt_min__posdef
         print *, "y=", y
-        print *, "dx__pd=", y/dydx0
-        print *, "dy=", dx_min__posdef*dydx0
+        print *, "dt__pd=", y/dydt0
+        print *, "dy=", dt_min__posdef*dydt0
         print *, ""
       endif
-      y = y + dx_min__posdef*dydx0
-      x = x + dx_min__posdef
+      y = y + dt_min__posdef*dydt0
+      t = t + dt_min__posdef
 
       if (debug) then
         print *, "y_new=", y
@@ -180,7 +241,7 @@ contains
       ! TODO: There's got to be a better way than this, we want to make
       ! sure we get exactly to zero
       where (y(:) < tiny(y(1)))
-      !where (y(:) < 1.0e-3_kreal)
+        !where (y(:) < 1.0e-3_kreal)
         y(:) = 0.0_kreal
       endwhere
     endif
@@ -192,14 +253,14 @@ contains
       k4 = 0.0
       k5 = 0.0
 
-      k1 = dx*dydx(x,       y)
-      k2 = dx*dydx(x+a2*dx, fix_y(y, b21*k1))
-      k3 = dx*dydx(x+a3*dx, fix_y(y, b31*k1 + b32*k2))
-      k4 = dx*dydx(x+a4*dx, fix_y(y, b41*k1 + b42*k2 + b43*k3))
-      k5 = dx*dydx(x+a5*dx, fix_y(y, b51*k1 + b52*k2 + b53*k3 + b54*k4))
+      k1 = dt*dydt(t,       y)
+      k2 = dt*dydt(t+a2*dt, fix_y_isometric(y, b21*k1))
+      k3 = dt*dydt(t+a3*dt, fix_y_isometric(y, b31*k1 + b32*k2))
+      k4 = dt*dydt(t+a4*dt, fix_y_isometric(y, b41*k1 + b42*k2 + b43*k3))
+      k5 = dt*dydt(t+a5*dt, fix_y_isometric(y, b51*k1 + b52*k2 + b53*k3 + b54*k4))
 
-      y_n1 = fix_y(y, c1_1*k1 + c2_1*k2 + c3_1*k3 + c4_1*k4 + c5_1*k5)
-      y_n2 = fix_y(y, c1_2*k1 + c2_2*k2 + c3_2*k3 + c4_2*k4 + c5_2*k5)
+      y_n1 = fix_y_isometric(y, c1_1*k1 + c2_1*k2 + c3_1*k3 + c4_1*k4 + c5_1*k5)
+      y_n2 = fix_y_isometric(y, c1_2*k1 + c2_2*k2 + c3_2*k3 + c4_2*k4 + c5_2*k5)
 
       !abs_err = abs(y_n1 - y_n2)
       abs_err = abs(1./6.*(k4 - k5))
@@ -212,7 +273,7 @@ contains
         !msg = "Solution became negative"
         if (debug) then
           print *, "=> solution became negative"
-          print *, "dx s", dx, s
+          print *, "dt s", dt, s
           print *, "y", y
           print *, "y_n2", y_n2
           print *, "max_tot_err", max_total_err
@@ -240,7 +301,7 @@ contains
       if (any(isnan(y_n1)) .or. any(isnan(y_n2))) then
         if (debug) then
           print *, "Solution became nan"
-          print *, "s dt", s, dx
+          print *, "s dt", s, dt
           print *, "y=", y
         endif
         if (s > 1.0) then
@@ -254,11 +315,11 @@ contains
           msg = " "
           done = .true.
           y = y_n2
-          x = x + dx
+          t = t + dt
         endif
       endif
 
-      dx = dx*s
+      dt = dt*s
 
       if (.not. done) then
         if (m > max_steps) then
@@ -271,7 +332,7 @@ contains
           !print *, "Warning: Incorrect scaling, timestep is growing."
           !!s = 0.1
           !endif
-          call rkf34_original(dydx, y, fix_y, x, dx, msg, m+1)
+          call rkf34_original(y, t, dt, msg, m+1)
         endif
       endif
     endif
