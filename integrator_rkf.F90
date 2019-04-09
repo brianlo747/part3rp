@@ -1,11 +1,12 @@
 module integrator_rkf
+  use microphysics_constants, only: kreal
   use microphysics_constants, only: abs_tol => integration_abs_tol, rel_tol => integration_rel_tol
 
   implicit none
 
   public integrate_with_message
 
-  logical, parameter :: debug = .false.
+  logical, parameter :: debug = .true.
   real(8), parameter :: dx_min = 1.0e-10
   integer, parameter :: max_steps = 10
 
@@ -97,14 +98,14 @@ contains
 
     !f2py raise_python_exception msg
 
-    !real(8), parameter :: &
-    !a2=2./7.,   b21=2./7., &
-    !a3=7./15.,  b31=77./900.,   b32= 343.900, &
-    !a4=35./38., b41=805./1444., b42=-77175./54872., b43=97125./54872., &
-    !a5=1.0,     b51=79./490.,   b52= 0.0,           b53=2175./3616.,   b54=2166./9065.
-    !real(8) :: &
-    !c1_1=79./490.,    c2_1=0.0,  c3_1=2175./36.26,  c4_1=2166./9065.,&
-    !c1_2=229./1470.,  c2_2=0.0,  c3_2=1125./1813.,   c4_2=13718./81585., c5_2=1./18.
+    ! real(8), parameter :: &
+    ! a2=2./7.,   b21=2./7., &
+    ! a3=7./15.,  b31=77./900.,   b32= 343.900, &
+    ! a4=35./38., b41=805./1444., b42=-77175./54872., b43=97125./54872., &
+    ! a5=1.0,     b51=79./490.,   b52= 0.0,           b53=2175./3616.,   b54=2166./9065.
+    ! real(8) :: &
+    ! c1_1=79./490.,    c2_1=0.0,  c3_1=2175./36.26,  c4_1=2166./9065.,&
+    ! c1_2=229./1470.,  c2_2=0.0,  c3_2=1125./1813.,   c4_2=13718./81585., c5_2=1./18.
 
     real(8), parameter :: &
     a2=0.5, b21=0.5, &
@@ -143,7 +144,7 @@ contains
     !dx_min is delta_t_min
     !dx is delta_t
 
-    dx_min__posdef = minval(abs(y/dydx0), y /= 0.0)
+    dx_min__posdef = minval(abs(y/dydx0), y /= 0.0_kreal)
     if (dx_min__posdef > dx_min) then
       if (dx > dx_min__posdef) then
         if (debug) then
@@ -179,7 +180,8 @@ contains
       ! TODO: There's got to be a better way than this, we want to make
       ! sure we get exactly to zero
       where (y(:) < tiny(y(1)))
-        y(:) = 0.0
+      !where (y(:) < 1.0e-3_kreal)
+        y(:) = 0.0_kreal
       endwhere
     endif
 

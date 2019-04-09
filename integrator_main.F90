@@ -1,4 +1,5 @@
 module integrator_main
+  use microphysics_constants, only: kreal
   use microphysics_constants, only: abs_tol => integration_abs_tol, rel_tol => integration_rel_tol
   !use microphysics_register, only: n_variables
   use integrator_helpers, only: integrate_isometric
@@ -41,6 +42,7 @@ contains
     m_total = 0
 
     call integrate_isometric(y, t0, t_end, msg, m_total, n_variables)
+    call integrate_with_message(dydt_isometric, y, increment_state_isometric, t0, t_end, msg_out, m_total)
 
     if (present(msg_out)) then
       !TODO: when calling from ATHAM this "optional" value is set although

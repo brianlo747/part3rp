@@ -132,13 +132,13 @@ module mphys_with_ice
       ! Calculation of diffusion F_d and heat F_k terms
 
       Ka = Ka_f(T)
-      Fk = (Lv/(R_v*T) - 1._kreal) * (Lv/(Ka*T))
+      Fk = (Lv/(R_v*T) - 1.0_kreal) * (Lv/(Ka*T))
 
       Dv = Dv_f(T, p)
       Fd = R_v*T/(pv_sat*Dv)
 
       ! Compute rate of change of condensate from diffusion
-      dql_dt__condensation_evaporation = 4.*pi*Nc/rho*r_c*(Sw - 1.0)/(Fk + Fd)
+      dql_dt__condensation_evaporation = 4.0_kreal*pi*Nc/rho*r_c*(Sw - 1.0_kreal)/(Fk + Fd)
 
    end function dql_dt__condensation_evaporation
 
@@ -271,7 +271,7 @@ module mphys_with_ice
    end function
 
    pure function dqi_dt__sublimation_deposition(qi, rho, T, p) ! TODO: Check sat pressure!!
-     use microphysics_constants, only: pi, rho_i, T0
+     use microphysics_constants, only: pi, rho_i, temp0 => T0
      use microphysics_constants, only: Ls => L_subl, R_v
      use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
      use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
@@ -291,11 +291,11 @@ module mphys_with_ice
      real(kreal) :: N_f, Dv, Fd_prime, Fk_prime, Ka, qi_sat, pv_sat, Si
      real(kreal) :: r_i
 
-     if (qi == 0.0 .OR. T > T0) then
+     if (qi == 0.0 .OR. T > temp0) then
         dqi_dt__sublimation_deposition = 0.0_kreal
      else
 
-       N_f = N_0f * EXP(beta * (T0 - T)) ! Cooper parameterisation
+       N_f = N_0f * EXP(beta * (temp0 - T)) ! Cooper parameterisation
 
        r_i = (qi*rho/(r4_3*pi*N_f*rho_i))**r1_3
 
@@ -392,7 +392,7 @@ module mphys_with_ice
    end function
 
    pure function dqh_dt__autoconversion_ice_graupel(qi, qg, rho_g, T)
-     use microphysics_constants, only: T0
+     use microphysics_constants, only: temp0 => T0
 
      real(kreal), intent(in) :: qi, qg, rho_g, T
      real(kreal) :: dqh_dt__autoconversion_ice_graupel
@@ -401,11 +401,11 @@ module mphys_with_ice
 
      real(kreal) :: k_i
 
-     if (qi == 0.0 .OR. T > T0) then
+     if (qi == 0.0 .OR. T > temp0) then
        dqh_dt__autoconversion_ice_graupel  = 0.0_kreal
 
      else
-       k_i = 1.0e-3_kreal * EXP(0.025_kreal * (T - T0)) !TODO: Check T dependence
+       k_i = 1.0e-3_kreal * EXP(0.025_kreal * (T - temp0)) !TODO: Check T dependence
 
        ! TODO: what happens if ql < qg ?
        dqh_dt__autoconversion_ice_graupel = k_i*(qi - qg/rho_g*a_i)
@@ -414,10 +414,10 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqr_dt__accretion_cloud_rain(ql, rho_g, qr)
+   pure function dqr_dt__accretion_cloud_rain(ql, rho_g, rho, qr)
       use microphysics_constants, only: pi, rho_l => rho_w
 
-      real(kreal), intent(in) :: ql, rho_g, qr
+      real(kreal), intent(in) :: ql, rho_g, rho, qr
       real(kreal) :: dqr_dt__accretion_cloud_rain
 
       real(kreal), parameter :: G3p5 = 3.32399614155_kreal  ! = Gamma(3.5)
@@ -433,10 +433,10 @@ module mphys_with_ice
       if (qr .eq. 0.0_kreal) then
          dqr_dt__accretion_cloud_rain = 0.0_kreal
       else
-         lambda_r = (pi*(rho_l)/(qr*rho_g)*N_0r)**(0.25_kreal)
+         lambda_r = (8.0_kreal*pi*(rho_l)/(qr*rho)*N_0r)**(0.25_kreal)
 
          dqr_dt__accretion_cloud_rain = pi*N_0r*a_r*(rho0/rho_g)**0.5_kreal * &
-         G3p5*lambda_r**(-3.5_kreal)*ql
+         G3p5/lambda_r**(3.5_kreal)*ql*rho_l
 
          dqr_dt__accretion_cloud_rain = max(0.0_kreal, &
          dqr_dt__accretion_cloud_rain)
@@ -445,7 +445,7 @@ module mphys_with_ice
 
    pure function dqh_dt__accretion_ice_graupel(qi, rho_g, qh, T) !TODO Rate too large!
      ! Equation 19
-     use microphysics_constants, only: pi, rho_l => rho_w
+     use microphysics_constants, only: pi, rho_l => rho_w, temp0 => T0
 
      real(kreal), intent(in) :: qi, rho_g, qh, T
      real(kreal) :: dqh_dt__accretion_ice_graupel
@@ -467,7 +467,7 @@ module mphys_with_ice
      else
         l_h = (8.0_kreal * pi * rho_h/(qh*rho_g)*N_0h)**(0.25_kreal)
 
-        E_hi = min(1.0_kreal, EXP(0.05_kreal * (T - T_0)))
+        E_hi = min(1.0_kreal, EXP(0.05_kreal * (T - temp0)))
 
         dqh_dt__accretion_ice_graupel = pi*E_hi*N_0h*a_h*rho_h * &
         (rho0/rho_g)**0.5_kreal*G3p5/l_h**3.5_kreal * qi
@@ -599,7 +599,7 @@ module mphys_with_ice
      r_r = (qr*rho/(r4_3*pi*N_0r*rho_l))**r1_3
      r_h = (qh*rho/(r4_3*pi*N_0h*rho_h))**r1_3
      lambda_h = (8.0_kreal*rho_h*N_0h/(qh*rho))**0.25_kreal
-     lambda_r = (8.0_kreal*pi*(rho_l)/(qr*rho_g)*N_0r)**(0.25_kreal)
+     lambda_r = (8.0_kreal*pi*(rho_l)/(qr*rho)*N_0r)**(0.25_kreal)
      wr1 = 2.0_kreal * rho_l * g * r_r**2
      wr2 = k_2 * rho_l * (rho/rho_g)**r1_2 * r_r
      wr3 = (8.0_kreal*rho_g*g/(3*C_Dr*rho_g))**r1_2
@@ -658,7 +658,7 @@ module mphys_with_ice
 
         ! size-distribtion length-scale
         l_h = (8.0_kreal*rho_h*N_0h/(qh*rho))**0.25_kreal
-        l_r = (8.0_kreal*pi*(rho_l)/(qr*rho_g)*N_0r)**(0.25_kreal)
+        l_r = (8.0_kreal*pi*(rho_l)/(qr*rho)*N_0r)**(0.25_kreal)
 
         ! air condutivity and diffusion effects
         Ka = Ka_f(T)
@@ -728,7 +728,7 @@ module mphys_with_ice
         Sw = qv/qv_sat
 
         ! size-distribtion length-scale
-        l_r = (8.0_kreal*pi*(rho_l)/(qr*rho_g)*N_0r)**(0.25_kreal)
+        l_r = (8.0_kreal*pi*(rho_l)/(qr*rho)*N_0r)**(0.25_kreal)
 
         ! air condutivity and diffusion effects
         Ka = Ka_f(T)
@@ -755,7 +755,7 @@ module mphys_with_ice
    end function
 
    pure function dqi_dt__freezing_graupel(qh, rho, T) !TODO: Check negative sign
-     use microphysics_constants, only: pi, T0, rho_l => rho_w
+     use microphysics_constants, only: pi, temp0 => T0, rho_l => rho_w
 
      real(kreal), intent(in) :: qh, rho, T
      real(kreal) :: dqi_dt__freezing_graupel
@@ -769,12 +769,12 @@ module mphys_with_ice
      lambda_h = (8.0_kreal*pi*rho_h*N_0h/(qh*rho))**0.25_kreal
 
      dqi_dt__freezing_graupel = min(1.0, &
-     1280.0_kreal/lambda_h**7.0_kreal * pi**2 * &
-     B_prime * N_0r * (EXP(A_prime*(T0-T))-1.0_kreal) * rho_l/rho)
+       1280.0_kreal/lambda_h**7.0_kreal * pi**2 * &
+       B_prime * N_0r * (EXP(A_prime*(temp0-T))-1.0_kreal) * rho_l/rho)
    end function
 
    pure function dqh_dt__freezing_ice(ql, rho, T) !TODO: Check negative sign
-     use microphysics_constants, only: pi, T0, rho_l => rho_w
+     use microphysics_constants, only: pi, temp0 => T0, rho_l => rho_w
 
      real(kreal), intent(in) :: ql, rho, T
      real(kreal) :: dqh_dt__freezing_ice
@@ -787,7 +787,8 @@ module mphys_with_ice
      real(kreal) :: r_c
      r_c = (ql*rho/(r4_3*pi*N_c*rho_l))**r1_3
 
-     dqh_dt__freezing_ice = 16.0_kreal/9.0_kreal * pi**2 * r_c**6 * &
-     B_prime * N_c * (EXP(A_prime*(T0-T))-1.0_kreal) * rho_l/rho
+     dqh_dt__freezing_ice = min(1.0, &
+       16.0_kreal/9.0_kreal * pi**2 * r_c**6 * &
+       B_prime * N_c * (EXP(A_prime*(temp0-T))-1.0_kreal) * rho_l/rho)
    end function
 end module mphys_with_ice

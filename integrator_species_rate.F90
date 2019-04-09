@@ -7,7 +7,7 @@ module integrator_species_rate
     pure function dydt_mphys_with_ice(t, y, c_m) result(dydt)
        !use microphysics_register, only: idx_temp, idx_pressure
        !use microphysics_register, only: idx_cwater, idx_water_vapour, idx_rain, idx_cice, idx_graupel
-       use microphysics_constants, only: T0, L_v => L_cond, L_s => L_subl , L_f => L_fusi
+       use microphysics_constants, only: temp0 => T0, L_v => L_cond, L_s => L_subl , L_f => L_fusi
        use mphys_with_ice
 
        real(kreal), dimension(:), intent(in) :: y
@@ -42,8 +42,8 @@ module integrator_species_rate
        qg = qv + qd
 
        ! compute gas and mixture density using equation of state
-       rho = rho_f(qd, qv, ql, qr, qi, qh, p, T)
-       rho_g = rho_f(qd, qv, 0.0_kreal, 0.0_kreal, 0.0_kreal, 0.0_kreal, p, T)
+       rho = rho_f(qd, qv, ql, qr, qi, qh, p, temp)
+       rho_g = rho_f(qd, qv, 0.0_kreal, 0.0_kreal, 0.0_kreal, 0.0_kreal, p, temp)
 
        ! compute time derivatives for each process TODO: Functions for each function
 
@@ -54,7 +54,7 @@ module integrator_species_rate
        dqhdt_sublidep = dqh_dt__sublimation_evaporation(qg=qg, qv=qv, qh=qh, rho=rho, T=temp, p=p)
        dqrdt_autoconv = dqr_dt__autoconversion(ql=ql, qg=qg, rho_g=rho_g, T=temp)
        dqhdt_autoconv = dqh_dt__autoconversion_ice_graupel(qi=qi, qg=qg, rho_g=rho_g, T=temp)
-       dqrdt_accre_rc = dqr_dt__accretion_cloud_rain(ql=ql, rho_g=rho_g, qr=qr)
+       dqrdt_accre_rc = dqr_dt__accretion_cloud_rain(ql=ql, rho_g=rho_g, rho=rho, qr=qr)
        dqhdt_accre_hi = dqh_dt__accretion_ice_graupel(qi=qi, rho_g=rho_g, qh=qh, T=temp)
        dqldt_accre_chr= dqh_dt__accretion_cloud_graupel_rain(ql=ql, rho_g=rho_g, rho=rho, qh=qh)
        dqhdt_accre_hiri= dqr_dt__accretion_ice_rain_graupel_i(qi=qi, rho_g=rho_g, rho=rho, qr=qr)
@@ -67,7 +67,7 @@ module integrator_species_rate
 
        ! combine to create time derivatives for species
 
-       if (temp > T0) then
+       if (temp > temp0) then
          dydt(3) =  dqldt_condevap - dqrdt_autoconv &
                   - dqrdt_accre_rc &
                   + dqldt_melt_ci  - dqidt_freeze
@@ -86,7 +86,14 @@ module integrator_species_rate
          dydt(1) = L_v/c_m*(dqldt_condevap + dqrdt_condevap + dqhdt_condevap) &
                  + L_s/c_m*(dqidt_sublidep + dqhdt_sublidep) &
                  + L_f/c_m*(dqldt_accre_chr + dqhdt_accre_hirr - dqrdt_melt_rh &
-                   - dqldt_melt_ci + dqidt_freeze + dqhdt_freeze)
+                 - dqldt_melt_ci + dqidt_freeze + dqhdt_freeze)
+         ! dydt(3) = 0.01_kreal
+         ! dydt(4) = 0.1_kreal
+         ! dydt(5) = 0.01_kreal
+         ! dydt(6) = 0.01_kreal
+         ! dydt(7) = 0.01_kreal
+         !
+         ! dydt(1) = 0.01_kreal
        else
          dydt(3) =  dqldt_condevap - dqrdt_autoconv &
                   - dqrdt_accre_rc &
@@ -104,9 +111,9 @@ module integrator_species_rate
                   - dqrdt_melt_rh + dqhdt_freeze + dqldt_accre_chr + dqhdt_accre_hr
 
          dydt(1) = L_v/c_m*(dqldt_condevap + dqrdt_condevap + dqhdt_condevap) &
-                  + L_s/c_m*(dqidt_sublidep + dqhdt_sublidep) &
-                  + L_f/c_m*(dqldt_accre_chr + dqhdt_accre_hirr + dqhdt_accre_hr &
-                  - dqrdt_melt_rh - dqldt_melt_ci + dqidt_freeze + dqhdt_freeze)
+                + L_s/c_m*(dqidt_sublidep + dqhdt_sublidep) &
+                + L_f/c_m*(dqldt_accre_chr + dqhdt_accre_hirr + dqhdt_accre_hr &
+                - dqrdt_melt_rh - dqldt_melt_ci + dqidt_freeze + dqhdt_freeze)
        endif
 
     end function
