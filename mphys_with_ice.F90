@@ -10,67 +10,7 @@ module mphys_with_ice
 
    implicit none
 
-   !public init, rho_f, dqr_dt__autoconversion
-
    contains
-   ! subroutine init(p_disable_rain)
-   !    logical, optional :: p_disable_rain
-   !
-   !    call register_variable('cloud_water', 1)
-   !    call register_variable('rain', 1)
-   !    call register_variable('cloud_ice', 1)
-   !    call register_variable('idx_graupel', 1)
-   !
-   ! end subroutine
-
-   ! pure function dydt(t, y, c_m)
-   !    use microphysics_register, only: idx_temp, idx_pressure
-   !    use microphysics_register, only: idx_cwater, idx_water_vapour, idx_rain, idx_cice, idx_graupel
-   !    use microphysics_constants, only: L_v => L_cond
-   !
-   !    real(kreal), dimension(:), intent(in) :: y
-   !    real(kreal), intent(in) :: t, c_m
-   !    real(kreal) :: dydt(size(y))
-   !
-   !    real(kreal) :: ql, qv, qg, qr, qd, qh
-   !    real(kreal) :: rho, rho_g
-   !    real(kreal) :: dqrdt_autoconv, dqrdt_accre, dqrdt_condevap, dqldt_condevap
-   !    real(kreal) :: temp, pressure
-   !
-   !    ! OBS: it's important to make sure that return variable is initiated to
-   !    ! zero
-   !    dydt = 0.0_kreal
-   !
-   !    temp = y(idx_temp)
-   !    pressure = y(idx_pressure)
-   !
-   !    ! pick out specific concentrations from state vectors
-   !    ql = y(idx_cwater)
-   !    qr = y(idx_rain)
-   !    qv = y(idx_water_vapour)
-   !    qi = y(idx_cice)
-   !    qh = y(idx_graupel)
-   !    qd = 1.0_kreal - ql - qr - qv - qi - qh
-   !    qg = qv + qd
-   !
-   !    ! compute gas and mixture density using equation of state
-   !    rho = rho_f(qd, qv, ql, qr, pressure, temp)
-   !    rho_g = rho_f(qd, qv, 0.0_kreal, 0.0_kreal, pressure, temp)
-   !
-   !    ! compute time derivatives for each process TODO: Include other processes!
-   !    dqrdt_autoconv = dqr_dt__autoconversion(ql, qg, rho_g)
-   !    dqrdt_accre    = dqr_dt__accretion(ql, qg, rho_g, qr)
-   !    dqldt_condevap = dqr_dt__condensation_evaporation(qv=qv, qr=qr, rho=rho, T=temp, p=pressure)
-   !    dqldt_condevap = dql_dt__condensation_evaporation(rho=rho, rho_g=rho_g, qv=qv, ql=ql, T=temp, p=pressure)
-   !
-   !    ! combine to create time derivatives for species TODO: Include many more terms!
-   !    dydt(idx_water_vapour) = -dqldt_condevap                                - dqrdt_condevap
-   !    dydt(idx_cwater)       =  dqldt_condevap - dqrdt_autoconv - dqrdt_accre
-   !    dydt(idx_rain)         =                   dqrdt_autoconv + dqrdt_accre + dqrdt_condevap
-   !
-   !    dydt(idx_temp) = L_v/c_m*dqldt_condevap
-   !
-   ! end function
 
    pure function rho_f(qd, qv, ql, qr, qi, qh, p, temp) result(rho)
       use microphysics_constants, only: R_v, R_d, rho_i, rho_l => rho_w

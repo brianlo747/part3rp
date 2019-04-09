@@ -8,3 +8,5 @@ gfortran -c -g -O0 integrator_main.F90
 
 gfortran -o function_tests -g -O0 function_tests.F90 *.o
 gfortran -o integrator_tests -g -O0 integrator_tests.F90 *.o
+
+./integrator_tests

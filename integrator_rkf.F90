@@ -86,29 +86,33 @@ contains
     ! need to update pressure, since we assume constant volume density is
     ! unchanged, use old density to calculate update pressure
     y_new(2) = pressure_eos(y_new, rho_old)
-
   end function fix_y_isometric
+
+  subroutine mass_scale(y, msg)
+    !TODO: Mass Scaling
+
+    real(8), intent(inout), dimension(:) :: y
+    character(len=100), intent(out) :: msg
+    real(8) :: q_negative
+
+    if (count(y(3:)<0.0_kreal) > 1 .or. any(y(3:) < -1.0_kreal)) then
+      msg = "failed to scale mass"
+    endif
+
+    q_negative = y( MINLOC(y(3:), dim=1) + 2 )
+
+    where (y(3:) >= 0.0_kreal)
+      y(3:) = y(3:) / (-1.0_kreal * sum(y(3:))) * q_negative
+    elsewhere
+      y(3:) = 0.0_kreal
+    endwhere
+  end subroutine
 
   subroutine integrate_with_message(y, t0, t_end, msg, m_total)
     real(8), intent(inout), dimension(:) :: y
     real(8), intent(in) :: t_end, t0
     real(8) :: dt_s, t  ! sub-step timestep
     integer, intent(out) :: m_total
-
-    ! interface
-    !   function dydt_f(x, y)
-    !     real(8), intent(in) :: x
-    !     real(8), dimension(:), intent(in) :: y
-    !     real(8), dimension(size(y)) :: dydt_f
-    !   end function
-    ! end interface
-
-    ! interface
-    !   function fix_y(y_old, dy)
-    !     real(8), dimension(:), intent(in) :: y_old, dy
-    !     real(8), dimension(size(dy)) :: fix_y
-    !   end function
-    ! end interface
 
     character(len=100), intent(out) :: msg
     integer :: m
@@ -145,7 +149,6 @@ contains
     enddo
   end subroutine integrate_with_message
 
-
   recursive subroutine rkf34_original(y, t, dt, msg, m)
     character(len=100), intent(out) :: msg
     real(8), intent(inout) :: dt
@@ -159,23 +162,26 @@ contains
 
     !f2py raise_python_exception msg
 
-    ! real(8), parameter :: &
-    ! a2=2./7.,   b21=2./7., &
-    ! a3=7./15.,  b31=77./900.,   b32= 343.900, &
-    ! a4=35./38., b41=805./1444., b42=-77175./54872., b43=97125./54872., &
-    ! a5=1.0,     b51=79./490.,   b52= 0.0,           b53=2175./3616.,   b54=2166./9065.
-    ! real(8) :: &
-    ! c1_1=79./490.,    c2_1=0.0,  c3_1=2175./36.26,  c4_1=2166./9065.,&
-    ! c1_2=229./1470.,  c2_2=0.0,  c3_2=1125./1813.,   c4_2=13718./81585., c5_2=1./18.
+    ! Coefficients for RKFelhberg3(4)
+    real(8), parameter :: &
+    a2=2./7.,   b21=2./7., &
+    a3=7./15.,  b31=77./900.,   b32= 343.900, &
+    a4=35./38., b41=805./1444., b42=-77175./54872., b43=97125./54872., &
+    a5=1.0,     b51=79./490.,   b52= 0.0,           b53=2175./3626.,   b54=2166./9065.
+    real(8) :: &
+    c1_1=79./490.,    c2_1=0.0,  c3_1=2175./36.26,  c4_1=2166./9065., c5_1=0.0, &
+    c1_2=229./1470.,  c2_2=0.0,  c3_2=1125./1813.,   c4_2=13718./81585., c5_2=1./18.
 
-    real(8), parameter :: &
-    a2=0.5, b21=0.5, &
-    a3=0.5, b31=0.0,        b32= 0.5, &
-    a4=1.0, b41=0.0,        b42= 0.0,           b43=1.0, &
-    a5=1.0, b51=1./6.,      b52= 1./3.,         b53=1./3.,   b54= 1./6.
-    real(8), parameter :: &
-    c1_1=0.0, c2_1=0.0,  c3_1=0.0,  c4_1=0.0,  c5_1=1.,&
-    c1_2=1./6., c2_2=1./3.,    c3_2=1./3.,     c4_2=0.,   c5_2=1./6.
+    ! Coefficients for RK3(4) method
+    ! real(8), parameter :: &
+    ! !a1=0.0, &
+    ! a2=0.5, b21=0.5, &
+    ! a3=0.5, b31=0.0,        b32= 0.5, &
+    ! a4=1.0, b41=0.0,        b42= 0.0,           b43=1.0, &
+    ! a5=1.0, b51=1./6.,      b52= 1./3.,         b53=1./3.,   b54= 1./6.
+    ! real(8), parameter :: &
+    ! c1_1=0.0, c2_1=0.0,  c3_1=0.0,  c4_1=0.0,  c5_1=1.,&
+    ! c1_2=1./6., c2_2=1./3.,    c3_2=1./3.,     c4_2=0.,   c5_2=1./6.
 
     real(8), dimension(size(y)) :: k1, k2, k3, k4, k5
     real(8), dimension(size(y)) :: abs_err, y_n1, y_n2, rel_err
@@ -192,29 +198,36 @@ contains
 
     done = .false.
 
+    ! Calculate rate of change based on initial t and y
     dydt0 = dydt(t, y)
 
     ! TODO: use a vector for abs error here, so that we can have a
     ! different abs error for say specific concentration and temperature
-    !
+
     ! State components that are already zero do not contribute to the
     ! relative error calculation
 
-    !See Leif's paper 4.2.1
-    !dx_min__posdef is delta_t_max
-    !dx_min is delta_t_min
-    !dx is delta_t
-
+    ! Calculate a timestep that would lead to a species reaching 0
+    ! This is to ensure positive definite species values when integrating
     dt_min__posdef = minval(abs(y/dydt0), y /= 0.0_kreal)
+
+    ! Check if positive definite timestep is not too small
     if (dt_min__posdef > dt_min) then
+
+      ! Check if current timestep is too large for positive definite condition
       if (dt > dt_min__posdef) then
+
+        ! Timestep too large for positive definite condition
         if (debug) then
           print *, "Adjusting integration step down, too big to be pos def"
           print *, "dt dt_min__posdef, m", dt, dt_min__posdef, m
           print *, ""
         endif
+
+        ! Scaling includes half for safety
         s = 0.5*dt_min__posdef/dt
         dt = s*dt
+
         if (debug) then
           print *, "Initial timestep risks solution becoming negative, scaling timestep"
           print *, "by s=", s
@@ -222,6 +235,8 @@ contains
         endif
       endif
     else
+
+      ! Timestep too small, smaller than the universally defined limit
       if (debug) then
         print *, "Timestep required for pos def is very small so we just take a single forward"
         print *, "Euler step before runge-kutta integration"
@@ -231,6 +246,8 @@ contains
         print *, "dy=", dt_min__posdef*dydt0
         print *, ""
       endif
+
+      ! Euler step
       y = y + dt_min__posdef*dydt0
       t = t + dt_min__posdef
 
@@ -241,7 +258,6 @@ contains
       ! TODO: There's got to be a better way than this, we want to make
       ! sure we get exactly to zero
       where (y(:) < tiny(y(1)))
-        !where (y(:) < 1.0e-3_kreal)
         y(:) = 0.0_kreal
       endwhere
     endif
@@ -262,13 +278,14 @@ contains
       y_n1 = fix_y_isometric(y, c1_1*k1 + c2_1*k2 + c3_1*k3 + c4_1*k4 + c5_1*k5)
       y_n2 = fix_y_isometric(y, c1_2*k1 + c2_2*k2 + c3_2*k3 + c4_2*k4 + c5_2*k5)
 
-      !abs_err = abs(y_n1 - y_n2)
-      abs_err = abs(1./6.*(k4 - k5))
+      abs_err = abs(y_n1 - y_n2)
+      !abs_err = abs(1./6.*(k4 - k5))
 
       ! TODO: make abs_tol and rel_tol vectors
-      max_total_err = (abs_tol + rel_tol*abs(y))
+      max_total_err = (abs_tol + rel_tol*abs(y)) * dt
       s = 0.84*(minval(max_total_err/abs_err, abs_err > 0.0))**0.25
 
+      ! Check to see if any solution is negative
       if (any(y_n2 < 0.0)) then
         !msg = "Solution became negative"
         if (debug) then
@@ -280,6 +297,8 @@ contains
           print *, "abs_err", abs_err
         endif
 
+        ! Check if s is large
+        ! Large s suggests the current or a bigger timestep can be taken
         if (s > 1.0) then
           msg = "s was huge"
           done = .true.
@@ -298,6 +317,7 @@ contains
         print *, ":: scaling by s", s
       endif
 
+      ! Check if any solution is not a number...
       if (any(isnan(y_n1)) .or. any(isnan(y_n2))) then
         if (debug) then
           print *, "Solution became nan"
@@ -309,9 +329,10 @@ contains
         endif
         !msg = "solution became nan"
         !done = .true.
+      ! Success case
       else
         if (all(abs_err < max_total_err)) then
-          ! clear the error message, in case it was set earlier
+          ! Clear the error message, in case it was set earlier
           msg = " "
           done = .true.
           y = y_n2
@@ -321,6 +342,7 @@ contains
 
       dt = dt*s
 
+      ! Recursive call if integration isn't complete yet
       if (.not. done) then
         if (m > max_steps) then
           msg = "Didn't converge"

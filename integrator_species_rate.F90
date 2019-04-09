@@ -82,15 +82,15 @@ module integrator_species_rate
                   - dqidt_sublidep - dqhdt_sublidep
          dydt(6) = dqidt_sublidep - dqhdt_autoconv &
                   - dqhdt_accre_hi - dqhdt_accre_hiri &
-                  - dqldt_melt_ci + dqidt_freeze
+                  - dqldt_melt_ci
          dydt(7) = dqhdt_condevap + dqhdt_sublidep + dqhdt_autoconv &
                   + dqhdt_accre_hi + dqhdt_accre_hiri + dqhdt_accre_hirr &
-                  - dqrdt_melt_rh + dqhdt_freeze
+                  - dqrdt_melt_rh
 
          dydt(1) = L_v/c_m*(dqldt_condevap + dqrdt_condevap + dqhdt_condevap) &
                  + L_s/c_m*(dqidt_sublidep + dqhdt_sublidep) &
                  + L_f/c_m*(dqldt_accre_chr + dqhdt_accre_hirr - dqrdt_melt_rh &
-                 - dqldt_melt_ci + dqidt_freeze + dqhdt_freeze)
+                 - dqldt_melt_ci)
          ! dydt(3) = 0.01_kreal
          ! dydt(4) = 0.1_kreal
          ! dydt(5) = 0.01_kreal
