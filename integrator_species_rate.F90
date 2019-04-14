@@ -73,11 +73,11 @@ module integrator_species_rate
 
        if (temp > temp0) then
          dydt(3) =  dqldt_condevap - dqrdt_autoconv &
-                  - dqrdt_accre_rc &
-                  + dqldt_melt_ci  - dqidt_freeze
+                  - dqrdt_accre_rc - dqldt_accre_chr &
+                  + dqldt_melt_ci
          dydt(4) =  dqrdt_condevap + dqrdt_autoconv &
                   + dqrdt_accre_rc + dqldt_accre_chr - dqhdt_accre_hirr &
-                  + dqrdt_melt_rh - dqhdt_freeze
+                  + dqrdt_melt_rh
          dydt(5) = -dqldt_condevap - dqrdt_condevap - dqhdt_condevap &
                   - dqidt_sublidep - dqhdt_sublidep
          dydt(6) = dqidt_sublidep - dqhdt_autoconv &
@@ -91,16 +91,10 @@ module integrator_species_rate
                  + L_s/c_m*(dqidt_sublidep + dqhdt_sublidep) &
                  + L_f/c_m*(dqldt_accre_chr + dqhdt_accre_hirr - dqrdt_melt_rh &
                  - dqldt_melt_ci)
-         ! dydt(3) = 0.01_kreal
-         ! dydt(4) = 0.1_kreal
-         ! dydt(5) = 0.01_kreal
-         ! dydt(6) = 0.01_kreal
-         ! dydt(7) = 0.01_kreal
-         !
-         ! dydt(1) = 0.01_kreal
+
        else
          dydt(3) =  dqldt_condevap - dqrdt_autoconv &
-                  - dqrdt_accre_rc &
+                  - dqrdt_accre_rc - dqldt_accre_chr &
                   + dqldt_melt_ci  - dqidt_freeze
          dydt(4) =  dqrdt_condevap + dqrdt_autoconv &
                   + dqrdt_accre_rc - dqhdt_accre_hirr &

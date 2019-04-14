@@ -7,7 +7,7 @@ module integrator_rkf
 
   public integrate_with_message
 
-  logical, parameter :: debug = .true.
+  logical, parameter :: debug = .false.
   real(8), parameter :: dt_min = 1.0e-10
   integer, parameter :: max_steps = 10
 
@@ -89,22 +89,23 @@ contains
   end function fix_y_isometric
 
   subroutine mass_scale(y, msg)
-    !TODO: Mass Scaling
 
     real(8), intent(inout), dimension(:) :: y
     character(len=100), intent(out) :: msg
-    real(8) :: q_negative
+    real(8) :: q_negative_sum, q_positive_sum
 
-    if (count(y(3:)<0.0_kreal) > 1 .or. any(y(3:) < -1.0_kreal)) then
+    q_negative_sum = sum(y(3:), mask = y(3:) < 0.0_kreal)
+    q_positive_sum = sum(y(3:), mask = y(3:) >= 0.0_kreal)
+
+    if (q_negative_sum < -1.0_kreal) then
       msg = "failed to scale mass"
+      return
     endif
 
-    q_negative = y( MINLOC(y(3:), dim=1) + 2 )
-
-    where (y(3:) >= 0.0_kreal)
-      y(3:) = y(3:) / (-1.0_kreal * sum(y(3:))) * q_negative
-    elsewhere
+    where (y(3:) < 0.0_kreal)
       y(3:) = 0.0_kreal
+    elsewhere
+      y(3:) = y(3:) + y(3:) * (-1.0_kreal*q_negative_sum) / q_positive_sum
     endwhere
   end subroutine
 
@@ -162,14 +163,25 @@ contains
 
     !f2py raise_python_exception msg
 
+    ! Coefficients for RKFelhberg4(5)
+     ! real(8), parameter :: &
+     ! a2=1./4.,   b21=1./4., &
+     ! a3=3./8.,  b31=3./32.,   b32= 9./32., &
+     ! a4=12./13., b41=1932./2197., b42=-7200./2197., b43=7296./2197., &
+     ! a5=1.0,     b51=439./216.,   b52= -8.0,        b53=3680./513.,   b54=-845./4104., &
+     ! a6=1./2.,  b61=-8./27.,  b62=2.0, b63=-3544./2565., b64=1859./4104., b65=-11./40.
+     ! real(8) :: &
+     ! c1_1=25./216.,    c2_1=0.0,  c3_1=1408./2565.,  c4_1=2197./4104., c5_1=-1./5., c6_1=0.0, &
+     ! c1_2=16./135.,  c2_2=0.0,  c3_2=6656./12825.,   c4_2=28561./56430., c5_2=-9./50., c6_2=2./55.
+
     ! Coefficients for RKFelhberg3(4)
     real(8), parameter :: &
     a2=2./7.,   b21=2./7., &
-    a3=7./15.,  b31=77./900.,   b32= 343.900, &
+    a3=7./15.,  b31=77./900.,   b32= 343./900., &
     a4=35./38., b41=805./1444., b42=-77175./54872., b43=97125./54872., &
     a5=1.0,     b51=79./490.,   b52= 0.0,           b53=2175./3626.,   b54=2166./9065.
     real(8) :: &
-    c1_1=79./490.,    c2_1=0.0,  c3_1=2175./36.26,  c4_1=2166./9065., c5_1=0.0, &
+    c1_1=79./490.,    c2_1=0.0,  c3_1=2175./3626.,  c4_1=2166./9065., c5_1=0.0, &
     c1_2=229./1470.,  c2_2=0.0,  c3_2=1125./1813.,   c4_2=13718./81585., c5_2=1./18.
 
     ! Coefficients for RK3(4) method
@@ -183,7 +195,7 @@ contains
     ! c1_1=0.0, c2_1=0.0,  c3_1=0.0,  c4_1=0.0,  c5_1=1.,&
     ! c1_2=1./6., c2_2=1./3.,    c3_2=1./3.,     c4_2=0.,   c5_2=1./6.
 
-    real(8), dimension(size(y)) :: k1, k2, k3, k4, k5
+    real(8), dimension(size(y)) :: k1, k2, k3, k4, k5, k6
     real(8), dimension(size(y)) :: abs_err, y_n1, y_n2, rel_err
     real(8), dimension(size(y)) :: dydt0, max_total_err
     real(8) :: s
@@ -274,15 +286,16 @@ contains
       k3 = dt*dydt(t+a3*dt, fix_y_isometric(y, b31*k1 + b32*k2))
       k4 = dt*dydt(t+a4*dt, fix_y_isometric(y, b41*k1 + b42*k2 + b43*k3))
       k5 = dt*dydt(t+a5*dt, fix_y_isometric(y, b51*k1 + b52*k2 + b53*k3 + b54*k4))
+      !k6 = dt*dydt(t+a6*dt, fix_y_isometric(y, b61*k1 + b62*k2 + b63*k3 + b64*k4 + b65*k5))
 
-      y_n1 = fix_y_isometric(y, c1_1*k1 + c2_1*k2 + c3_1*k3 + c4_1*k4 + c5_1*k5)
-      y_n2 = fix_y_isometric(y, c1_2*k1 + c2_2*k2 + c3_2*k3 + c4_2*k4 + c5_2*k5)
+      y_n1 = fix_y_isometric(y, c1_1*k1 + c2_1*k2 + c3_1*k3 + c4_1*k4 + c5_1*k5 )
+      y_n2 = fix_y_isometric(y, c1_2*k1 + c2_2*k2 + c3_2*k3 + c4_2*k4 + c5_2*k5 )
 
       abs_err = abs(y_n1 - y_n2)
       !abs_err = abs(1./6.*(k4 - k5))
 
       ! TODO: make abs_tol and rel_tol vectors
-      max_total_err = (abs_tol + rel_tol*abs(y)) * dt
+      max_total_err = (abs_tol + rel_tol*abs(y_n2)) * dt
       s = 0.84*(minval(max_total_err/abs_err, abs_err > 0.0))**0.25
 
       ! Check to see if any solution is negative
@@ -303,6 +316,9 @@ contains
           msg = "s was huge"
           done = .true.
         endif
+
+        ! Finally, mass scale to deal with negative q species
+        call mass_scale(y_n2, msg)
       endif
 
       if (debug) then
