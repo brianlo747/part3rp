@@ -8,6 +8,7 @@ module integrator_rkf
   public integrate_with_message
 
   logical, parameter :: debug = .false.
+  logical, parameter :: debug_1 = .true.
   real(8), parameter :: dt_min = 1.0e-10
   integer, parameter :: max_steps = 10
 
@@ -15,6 +16,45 @@ contains
   !> Outer loop on integrator that guarantees that we reach `t_end` and
   !> keeps checking `msg` to see if we have an error
 
+  subroutine mass_scale(y, msg)
+
+    real(8), intent(inout), dimension(:) :: y
+    character(len=100), intent(out) :: msg
+    real(8) :: q_negative_sum, q_positive_sum
+
+    q_negative_sum = sum(y(3:), mask = y(3:) < 0.0_kreal)
+    q_positive_sum = sum(y(3:), mask = y(3:) >= 0.0_kreal)
+
+    if (q_negative_sum < -1.0_kreal) then
+      msg = "failed to scale mass"
+      return
+    endif
+
+    where (y(3:) < 0.0_kreal)
+      y(3:) = 0.0_kreal
+    elsewhere
+      y(3:) = y(3:) + y(3:) * q_negative_sum / q_positive_sum
+    endwhere
+  end subroutine
+
+  subroutine mass_scale_no_msg(y)
+
+    real(8), intent(inout), dimension(:) :: y
+    real(8) :: q_negative_sum, q_positive_sum
+
+    q_negative_sum = sum(y(3:), mask = y(3:) < 0.0_kreal)
+    q_positive_sum = sum(y(3:), mask = y(3:) >= 0.0_kreal)
+
+    if (q_negative_sum < -1.0_kreal) then
+      return
+    endif
+
+    where (y(3:) < 0.0_kreal)
+      y(3:) = 0.0_kreal
+    elsewhere
+      y(3:) = y(3:) + y(3:) * q_negative_sum / q_positive_sum
+    endwhere
+  end subroutine
   !> Calculate density of mixture from equation of state
   pure function density_eos(y) result(rho)
     !use microphysics_register, only: idx_cwater, idx_water_vapour, idx_rain
@@ -74,46 +114,35 @@ contains
     p = temp*(qd*R_d + qv*R_v)/(1./rho - (ql + qr)/rho_l - qi/rho_i - qh/rho_h)
   end function pressure_eos
 
-  function fix_y_isometric(y, dy) result(y_new)
+  function fix_y_isometric(y, dy, mass_scale_flag) result(y_new)
     !use microphysics_register, only: idx_pressure
 
     real(8), intent(in), dimension(:) :: y, dy
+    logical, intent(in) :: mass_scale_flag
     real(8) :: y_new(size(y)), rho_old
+    real(kreal) :: dydt_sum_check
 
     rho_old = density_eos(y)
     y_new = y + dy
 
+    !TODO: Posdef check here
+
     ! need to update pressure, since we assume constant volume density is
     ! unchanged, use old density to calculate update pressure
     y_new(2) = pressure_eos(y_new, rho_old)
-  end function fix_y_isometric
 
-  subroutine mass_scale(y, msg)
-
-    real(8), intent(inout), dimension(:) :: y
-    character(len=100), intent(out) :: msg
-    real(8) :: q_negative_sum, q_positive_sum
-
-    q_negative_sum = sum(y(3:), mask = y(3:) < 0.0_kreal)
-    q_positive_sum = sum(y(3:), mask = y(3:) >= 0.0_kreal)
-
-    if (q_negative_sum < -1.0_kreal) then
-      msg = "failed to scale mass"
-      return
+    if (mass_scale_flag) then
+      call mass_scale_no_msg(y_new)
     endif
 
-    where (y(3:) < 0.0_kreal)
-      y(3:) = 0.0_kreal
-    elsewhere
-      y(3:) = y(3:) + y(3:) * (-1.0_kreal*q_negative_sum) / q_positive_sum
-    endwhere
-  end subroutine
+  end function fix_y_isometric
 
   subroutine integrate_with_message(y, t0, t_end, msg, m_total)
     real(8), intent(inout), dimension(:) :: y
     real(8), intent(in) :: t_end, t0
     real(8) :: dt_s, t  ! sub-step timestep
     integer, intent(out) :: m_total
+    integer :: num_ts
 
     character(len=100), intent(out) :: msg
     integer :: m
@@ -125,7 +154,9 @@ contains
     dt_s = t_end - t0
     t = t0
 
+    num_ts = 0
     do while (t < t_end)
+
       !print *, "Step start", t, dt_s
       if (t + dt_s > t_end) then
         dt_s = t_end - t
@@ -142,12 +173,15 @@ contains
       m = 0
       call rkf34_original(y, t, dt_s, msg, m)
       m_total = m_total + m
+      num_ts = num_ts + 1
+
 
       if (msg(1:1) /= " ") then
         exit
       endif
 
     enddo
+    print *, num_ts
   end subroutine integrate_with_message
 
   recursive subroutine rkf34_original(y, t, dt, msg, m)
@@ -199,6 +233,7 @@ contains
     real(8), dimension(size(y)) :: abs_err, y_n1, y_n2, rel_err
     real(8), dimension(size(y)) :: dydt0, max_total_err
     real(8) :: s
+
 
     logical :: done = .false.
 
@@ -282,21 +317,26 @@ contains
       k5 = 0.0
 
       k1 = dt*dydt(t,       y)
-      k2 = dt*dydt(t+a2*dt, fix_y_isometric(y, b21*k1))
-      k3 = dt*dydt(t+a3*dt, fix_y_isometric(y, b31*k1 + b32*k2))
-      k4 = dt*dydt(t+a4*dt, fix_y_isometric(y, b41*k1 + b42*k2 + b43*k3))
-      k5 = dt*dydt(t+a5*dt, fix_y_isometric(y, b51*k1 + b52*k2 + b53*k3 + b54*k4))
+      k2 = dt*dydt(t+a2*dt, fix_y_isometric(y, b21*k1, .true.))
+      k3 = dt*dydt(t+a3*dt, fix_y_isometric(y, b31*k1 + b32*k2, .true.))
+      k4 = dt*dydt(t+a4*dt, fix_y_isometric(y, b41*k1 + b42*k2 + b43*k3, .true.))
+      k5 = dt*dydt(t+a5*dt, fix_y_isometric(y, b51*k1 + b52*k2 + b53*k3 + b54*k4, .true.))
+
       !k6 = dt*dydt(t+a6*dt, fix_y_isometric(y, b61*k1 + b62*k2 + b63*k3 + b64*k4 + b65*k5))
 
-      y_n1 = fix_y_isometric(y, c1_1*k1 + c2_1*k2 + c3_1*k3 + c4_1*k4 + c5_1*k5 )
-      y_n2 = fix_y_isometric(y, c1_2*k1 + c2_2*k2 + c3_2*k3 + c4_2*k4 + c5_2*k5 )
+      y_n1 = fix_y_isometric(y, c1_1*k1 + c2_1*k2 + c3_1*k3 + c4_1*k4 + c5_1*k5, .false.)
+      y_n2 = fix_y_isometric(y, c1_2*k1 + c2_2*k2 + c3_2*k3 + c4_2*k4 + c5_2*k5, .false.)
+
+      if (any(isnan(y_n2))) then
+        print *, y_n2
+      endif
 
       abs_err = abs(y_n1 - y_n2)
       !abs_err = abs(1./6.*(k4 - k5))
 
       ! TODO: make abs_tol and rel_tol vectors
-      max_total_err = (abs_tol + rel_tol*abs(y_n2)) * dt
-      s = 0.84*(minval(max_total_err/abs_err, abs_err > 0.0))**0.25
+      max_total_err = (abs_tol + rel_tol*abs(y_n2))
+      s = 0.84*(minval(max_total_err  * dt / abs_err, abs_err > 0.0))**0.25
 
       ! Check to see if any solution is negative
       if (any(y_n2 < 0.0)) then

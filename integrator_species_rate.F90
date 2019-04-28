@@ -1,11 +1,13 @@
 module integrator_species_rate
   use mphys_with_ice
-  use microphysics_common, only: cv_mixture
+  use microphysics_common, only: cv_mixture, cp_mixture
 
   implicit none
 
+  logical, parameter :: debug_1 = .true.
+
   contains
-    pure function dydt_mphys_with_ice(t, y) result(dydt)
+    function dydt_mphys_with_ice(t, y) result(dydt)
        !use microphysics_register, only: idx_temp, idx_pressure
        !use microphysics_register, only: idx_cwater, idx_water_vapour, idx_rain, idx_cice, idx_graupel
        use microphysics_constants, only: temp0 => T0, L_v => L_cond, L_s => L_subl , L_f => L_fusi
@@ -16,7 +18,7 @@ module integrator_species_rate
        real(kreal) :: dydt(size(y))
 
        real(kreal) :: ql, qv, qg, qr, qd, qi, qh
-       real(kreal) :: rho, rho_g, c_m
+       real(kreal) :: rho, rho_g, c_m, c_p
        real(kreal) :: dqldt_condevap, dqrdt_condevap, dqhdt_condevap
        real(kreal) :: dqidt_sublidep, dqhdt_sublidep
        real(kreal) :: dqrdt_autoconv, dqhdt_autoconv
@@ -26,9 +28,11 @@ module integrator_species_rate
        real(kreal) :: dqidt_freeze , dqhdt_freeze
        real(kreal) :: temp, p
 
+       real(kreal) :: dydt_sum_check
+
        ! OBS: it's important to make sure that return variable is initiated to
        ! zero
-       dydt = 0.0_kreal
+       dydt(:) = 0.0_kreal
 
        temp = y(1)
        p = y(2)
@@ -48,6 +52,7 @@ module integrator_species_rate
 
        ! compute heat capacity of mixture
        c_m = cv_mixture(y)
+       c_p = cp_mixture(y)
 
        ! compute time derivatives for each process TODO: Functions for each function
 
@@ -66,8 +71,8 @@ module integrator_species_rate
        dqhdt_accre_hr = dqr_dt__accretion_graupel(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr)
        dqrdt_melt_rh  = dqr_dt__melting_graupel(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr, ql=ql)
        dqldt_melt_ci  = dqr_dt__melting_ice(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr, ql=ql)
-       dqidt_freeze   = dqi_dt__freezing_graupel(qh=qh, rho=rho, T=temp)
-       dqhdt_freeze   = dqh_dt__freezing_ice(ql=ql, rho=rho, T=temp)
+       dqhdt_freeze   = dqh_dt__freezing_graupel(qh=qh, rho=rho, T=temp)
+       dqidt_freeze   = dqi_dt__freezing_ice(ql=ql, rho=rho, T=temp)
 
        ! combine to create time derivatives for species
 
@@ -87,10 +92,11 @@ module integrator_species_rate
                   + dqhdt_accre_hi + dqhdt_accre_hiri + dqhdt_accre_hirr &
                   - dqrdt_melt_rh
 
-         dydt(1) = L_v/c_m*(dqldt_condevap + dqrdt_condevap + dqhdt_condevap) &
+         dydt(1) = & !(y(2)/100000._kreal)**(0.28591_kreal) * &
+                   (L_v/c_m*(dqldt_condevap + dqrdt_condevap + dqhdt_condevap) &
                  + L_s/c_m*(dqidt_sublidep + dqhdt_sublidep) &
                  + L_f/c_m*(dqldt_accre_chr + dqhdt_accre_hirr - dqrdt_melt_rh &
-                 - dqldt_melt_ci)
+                 - dqldt_melt_ci))
 
        else
          dydt(3) =  dqldt_condevap - dqrdt_autoconv &
@@ -108,10 +114,14 @@ module integrator_species_rate
                   + dqhdt_accre_hi + dqhdt_accre_hiri + dqhdt_accre_hirr &
                   - dqrdt_melt_rh + dqhdt_freeze + dqldt_accre_chr + dqhdt_accre_hr
 
-         dydt(1) = L_v/c_m*(dqldt_condevap + dqrdt_condevap + dqhdt_condevap) &
+
+         dydt(1) = & !(y(2)/100000._kreal)**(0.28591_kreal) * &
+                  (L_v/c_m*(dqldt_condevap + dqrdt_condevap + dqhdt_condevap) &
                 + L_s/c_m*(dqidt_sublidep + dqhdt_sublidep) &
                 + L_f/c_m*(dqldt_accre_chr + dqhdt_accre_hirr + dqhdt_accre_hr &
-                - dqrdt_melt_rh - dqldt_melt_ci + dqidt_freeze + dqhdt_freeze)
+                - dqrdt_melt_rh - dqldt_melt_ci + dqidt_freeze + dqhdt_freeze))
+
+
        endif
 
     end function

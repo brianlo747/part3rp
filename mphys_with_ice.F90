@@ -1,7 +1,7 @@
 !> Simple microphysics implementation which only supports the creation of cloud
 !> water from water vapour and rain-droplets through auto-conversion and
 !> accretion, no ice-phases are included.
-!TODO: Graupel Density!!
+!TODO: 50 for clean sea 200e6 for cleanland 2000 sea/land
 
 module mphys_with_ice
    !use microphysics_register, only: register_variable
@@ -37,7 +37,7 @@ module mphys_with_ice
       real(kreal) :: dql_dt__condensation_evaporation
 
       real(kreal), parameter :: r0 = 0.1e-6_kreal  ! initial cloud droplet radius
-      real(kreal), parameter :: N0 = 200*1.0e6_kreal  ! initial cloud droplet number
+      real(kreal), parameter :: N0 = 200.*1.0e6_kreal  ! initial cloud droplet number
 
       real(kreal) :: r_c, Nc
       real(kreal) :: pv_sat, qv_sat, Sw
@@ -487,7 +487,7 @@ module mphys_with_ice
 
      real(kreal), parameter :: G3p5 = 3.32399614155_kreal  ! = Gamma(3.5)
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
-     real(kreal), parameter :: Ni = 200*1.0e6_kreal
+     real(kreal), parameter :: Ni = 200.*1.0e6_kreal
      real(kreal), parameter :: a_r = 201.0_kreal  ! [m^.5 s^-1]
      real(kreal), parameter :: rho0 = 1.12_kreal
      real(kreal), parameter :: r4_3 = 4.0_kreal/3.0_kreal
@@ -495,7 +495,7 @@ module mphys_with_ice
 
      real(kreal) :: lambda_r, r_i
 
-     ! Radius of cloud droplet
+     ! Radius of ice
      r_i = (ql*rho/(r4_3*pi*Ni*rho_l))**r1_3
 
      ! If there is no rain available to perform accretion there is no need to calculate the accretion rate (also avoids
@@ -506,7 +506,7 @@ module mphys_with_ice
      else
         lambda_r = (8.0_kreal*pi*rho_l/(qr*rho)*N_0r)**(0.25_kreal)
 
-        dqr_dt__accretion_ice_rain_graupel_r = min(1.0, &
+        dqr_dt__accretion_ice_rain_graupel_r = qr * min(1.0, &
         lambda_r/N_0r * &
         (3.0_kreal/(4.0_kreal*pi*r_i**3.0_kreal)) * &
         dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr))
@@ -642,7 +642,7 @@ module mphys_with_ice
 
      ! droplet-size distribution constant
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
-     real(kreal), parameter :: Ni = 200*1.0e6_kreal
+     real(kreal), parameter :: Ni = 200.*1.0e6_kreal
 
      ! fall-speed coefficient taken from the r > 0.5mm expression for
      ! fall-speed from Herzog '98
@@ -694,11 +694,11 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqi_dt__freezing_graupel(qh, rho, T) !TODO: Check negative sign
+   pure function dqh_dt__freezing_graupel(qh, rho, T) !TODO: Check negative sign
      use microphysics_constants, only: pi, temp0 => T0, rho_l => rho_w
 
      real(kreal), intent(in) :: qh, rho, T
-     real(kreal) :: dqi_dt__freezing_graupel
+     real(kreal) :: dqh_dt__freezing_graupel
      real(kreal), parameter :: rho_h = 470.0_kreal
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
      real(kreal), parameter :: N_0h = 1.21e4_kreal  ! [m^-4]
@@ -708,17 +708,17 @@ module mphys_with_ice
      real(kreal) :: lambda_h
      lambda_h = (8.0_kreal*pi*rho_h*N_0h/(qh*rho))**0.25_kreal
 
-     dqi_dt__freezing_graupel = min(1.0, &
-       1280.0_kreal/lambda_h**7.0_kreal * pi**2 * &
+     dqh_dt__freezing_graupel = min(1.0, &
+       1280.0_kreal/lambda_h**7.0_kreal * pi**2.0_kreal * &
        B_prime * N_0r * (EXP(A_prime*(temp0-T))-1.0_kreal) * rho_l/rho)
    end function
 
-   pure function dqh_dt__freezing_ice(ql, rho, T) !TODO: Check negative sign
+   pure function dqi_dt__freezing_ice(ql, rho, T) !TODO: Check negative sign
      use microphysics_constants, only: pi, temp0 => T0, rho_l => rho_w
 
      real(kreal), intent(in) :: ql, rho, T
-     real(kreal) :: dqh_dt__freezing_ice
-     real(kreal), parameter :: N_c = 200*1.0e6_kreal  ! [m^-4]
+     real(kreal) :: dqi_dt__freezing_ice
+     real(kreal), parameter :: N_c = 200.*1.0e6_kreal  ! [m^-4]
      real(kreal), parameter :: A_prime = 0.66_kreal  ! [m^-4]
      real(kreal), parameter :: B_prime = 100.0_kreal  ! [m^-4]
      real(kreal), parameter :: r4_3 = 4.0_kreal / 3.0_kreal
@@ -727,8 +727,8 @@ module mphys_with_ice
      real(kreal) :: r_c
      r_c = (ql*rho/(r4_3*pi*N_c*rho_l))**r1_3
 
-     dqh_dt__freezing_ice = min(1.0, &
-       16.0_kreal/9.0_kreal * pi**2 * r_c**6 * &
+     dqi_dt__freezing_ice = min(1.0, &
+       16.0_kreal/9.0_kreal * pi**2 * r_c**6.0_kreal * &
        B_prime * N_c * (EXP(A_prime*(temp0-T))-1.0_kreal) * rho_l/rho)
    end function
 end module mphys_with_ice
