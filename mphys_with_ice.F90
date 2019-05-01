@@ -200,7 +200,7 @@ module mphys_with_ice
          nu = dyn_visc_f(T=T)
 
          ! Calcualte factor from ventilation coefficient
-         f = 1.6_kreal + 0.3_kreal*(2.0_kreal*a_h*rho/nu)**0.5_kreal * &
+         f = 1.6_kreal + 0.3_kreal*(2.0_kreal*a_h/nu)**0.5_kreal * &
          (rho0/rho)**0.25_kreal*G2p75/(l_h**0.75_kreal)
 
          ! compute rate of change of condensate from diffusion
@@ -312,7 +312,7 @@ module mphys_with_ice
         nu = dyn_visc_f(T=T) / rho
 
         ! Calcualte factor from ventilation coefficient
-        f = 1.6_kreal + 0.3_kreal*(2.0_kreal*a_h*rho/nu)**0.5_kreal * &
+        f = 1.6_kreal + 0.3_kreal*(2.0_kreal*a_h/nu)**0.5_kreal * &
         (rho0/rho)**0.25_kreal*G2p75/(l_h**0.75_kreal)
 
         dqh_dt__sublimation_evaporation = 4.0_kreal * pi / rho * N_0h * &
@@ -341,7 +341,7 @@ module mphys_with_ice
 
      real(kreal) :: k_i
 
-     if (qi == 0.0 .OR. T > temp0) then
+     if (qi == 0._kreal .OR. T > temp0) then
        dqh_dt__autoconversion_ice_graupel  = 0.0_kreal
 
      else
@@ -360,7 +360,7 @@ module mphys_with_ice
       real(kreal), intent(in) :: ql, rho_g, rho, qr
       real(kreal) :: dqr_dt__accretion_cloud_rain
 
-      real(kreal), parameter :: G3p5 = 3.32399614155_kreal  ! = Gamma(3.5)
+      real(kreal), parameter :: G3p5 = 3.32335097045_kreal  ! = Gamma(3.5)
       real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
       real(kreal), parameter :: a_r = 201.0_kreal  ! [m^.5 s^-1]
       real(kreal), parameter :: rho0 = 1.12_kreal
@@ -370,27 +370,27 @@ module mphys_with_ice
       ! If there is no rain available to perform accretion there is no need to calculate the accretion rate (also avoids
       ! divide-by-zero, see https://github.com/leifdenby/unified-microphysics/issues/5)
 
-      if (qr .eq. 0.0_kreal) then
+      if (qr .eq. 0.0_kreal .or. ql .eq. 0.0_kreal) then
          dqr_dt__accretion_cloud_rain = 0.0_kreal
       else
          lambda_r = (8.0_kreal*pi*(rho_l)/(qr*rho)*N_0r)**(0.25_kreal)
 
-         dqr_dt__accretion_cloud_rain = pi*N_0r*a_r*(rho0/rho_g)**0.5_kreal * &
-         G3p5/lambda_r**(3.5_kreal)*ql*rho_l
+         dqr_dt__accretion_cloud_rain = pi*N_0r*a_r*SQRT(rho0/rho_g) * &
+         G3p5/lambda_r**(3.5_kreal) *ql
 
          dqr_dt__accretion_cloud_rain = max(0.0_kreal, &
          dqr_dt__accretion_cloud_rain)
       endif
    end function
 
-   pure function dqh_dt__accretion_ice_graupel(qi, rho_g, qh, T) !TODO Rate too large!
+   pure function dqh_dt__accretion_ice_graupel(qi, rho_g, qh, T)
      ! Equation 19
      use microphysics_constants, only: pi, rho_l => rho_w, temp0 => T0
 
      real(kreal), intent(in) :: qi, rho_g, qh, T
      real(kreal) :: dqh_dt__accretion_ice_graupel
 
-     real(kreal), parameter :: G3p5 = 3.32399614155_kreal  ! = Gamma(3.5)
+     real(kreal), parameter :: G3p5 = 3.32335097045_kreal  ! = Gamma(3.5)
      real(kreal), parameter :: N_0h = 1.21e4_kreal  ! [m^-4]
      real(kreal), parameter :: a_h = 174.7_kreal  ! [m^.5 s^-1]
      real(kreal), parameter :: rho0 = 1.12_kreal
@@ -402,14 +402,14 @@ module mphys_with_ice
      ! If there is no graupel available to perform accretion there is no need to calculate the accretion rate (also avoids
      ! divide-by-zero, see https://github.com/leifdenby/unified-microphysics/issues/5)
 
-     if (qh .eq. 0.0_kreal) then
+     if (qh .eq. 0.0_kreal .OR. qi .eq. 0.0_kreal) then
         dqh_dt__accretion_ice_graupel = 0.0_kreal
      else
         l_h = (8.0_kreal * pi * rho_h/(qh*rho_g)*N_0h)**(0.25_kreal)
 
         E_hi = min(1.0_kreal, EXP(0.05_kreal * (T - temp0)))
 
-        dqh_dt__accretion_ice_graupel = pi*E_hi*N_0h*a_h*rho_h * &
+        dqh_dt__accretion_ice_graupel = pi*E_hi*N_0h*a_h * &
         (rho0/rho_g)**0.5_kreal*G3p5/l_h**3.5_kreal * qi
 
         dqh_dt__accretion_ice_graupel = max(0.0_kreal, &
@@ -417,14 +417,14 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqh_dt__accretion_cloud_graupel_rain(ql, rho_g, rho, qh) !TODO: Rate too big as well?
+   pure function dqh_dt__accretion_cloud_graupel_rain(ql, rho_g, rho, qh, T, qr) !TODO: Rate too big as well?
      !Equation 20
-     use microphysics_constants, only: pi, rho_l => rho_w
+     use microphysics_constants, only: pi, rho_l => rho_w, temp0 => T0
 
-     real(kreal), intent(in) :: ql, rho_g, rho, qh
+     real(kreal), intent(in) :: ql, rho_g, rho, qh, T, qr
      real(kreal) :: dqh_dt__accretion_cloud_graupel_rain
 
-     real(kreal), parameter :: G3p5 = 3.32399614155_kreal  ! = Gamma(3.5)
+     real(kreal), parameter :: G3p5 = 3.32335097045_kreal  ! = Gamma(3.5)
      real(kreal), parameter :: N_0h = 1.21e4_kreal  ! [m^-4]
      real(kreal), parameter :: a_h = 174.7_kreal  ! [m^.5 s^-1]
      real(kreal), parameter :: rho0 = 1.12_kreal
@@ -435,12 +435,12 @@ module mphys_with_ice
      ! If there is no graupel available to perform accretion there is no need to calculate the accretion rate (also avoids
      ! divide-by-zero, see https://github.com/leifdenby/unified-microphysics/issues/5)
 
-     if (qh .eq. 0.0_kreal) then
+     if (ql .eq. 0.0_kreal .or. (T<temp0 .and. qh .eq. 0.0_kreal) .or. T>temp0) then
         dqh_dt__accretion_cloud_graupel_rain = 0.0_kreal
      else
         l_h = (8.0_kreal*pi*rho_h*N_0h/(qh*rho))**0.25_kreal
 
-        dqh_dt__accretion_cloud_graupel_rain = pi*N_0h*a_h*rho_h * &
+        dqh_dt__accretion_cloud_graupel_rain = pi*N_0h*a_h * &
         (rho0/rho_g)**0.25_kreal*G3p5*l_h**(-3.5_kreal)*ql
 
         dqh_dt__accretion_cloud_graupel_rain = max(0.0_kreal, &
@@ -455,7 +455,7 @@ module mphys_with_ice
      real(kreal), intent(in) :: qi, rho_g, rho, qr
      real(kreal) :: dqr_dt__accretion_ice_rain_graupel_i
 
-     real(kreal), parameter :: G3p5 = 3.32399614155_kreal  ! = Gamma(3.5)
+     real(kreal), parameter :: G3p5 = 3.32335097045_kreal ! = Gamma(3.5)
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
      real(kreal), parameter :: a_r = 201.0_kreal  ! [m^.5 s^-1]
      real(kreal), parameter :: rho0 = 1.12_kreal
@@ -470,7 +470,7 @@ module mphys_with_ice
      else
         lambda_r = (8.0_kreal*pi*rho_l/(qr*rho)*N_0r)**(0.25_kreal)
 
-        dqr_dt__accretion_ice_rain_graupel_i = pi*N_0r*a_r*rho_l * &
+        dqr_dt__accretion_ice_rain_graupel_i = pi*N_0r*a_r * &
         (rho0/rho_g)**0.5_kreal*G3p5*lambda_r**(-3.5_kreal)*qi
 
         dqr_dt__accretion_ice_rain_graupel_i = max(0.0_kreal, &
@@ -485,7 +485,7 @@ module mphys_with_ice
      real(kreal), intent(in) :: qi, ql, rho, rho_g, qr
      real(kreal) :: dqr_dt__accretion_ice_rain_graupel_r
 
-     real(kreal), parameter :: G3p5 = 3.32399614155_kreal  ! = Gamma(3.5)
+     real(kreal), parameter :: G3p5 = 3.32335097045_kreal  ! = Gamma(3.5)
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
      real(kreal), parameter :: Ni = 200.*1.0e6_kreal
      real(kreal), parameter :: a_r = 201.0_kreal  ! [m^.5 s^-1]
@@ -506,10 +506,10 @@ module mphys_with_ice
      else
         lambda_r = (8.0_kreal*pi*rho_l/(qr*rho)*N_0r)**(0.25_kreal)
 
-        dqr_dt__accretion_ice_rain_graupel_r = qr * min(1.0, &
+        dqr_dt__accretion_ice_rain_graupel_r = max(0.0, qr * min(1.0, &
         lambda_r/N_0r * &
         (3.0_kreal/(4.0_kreal*pi*r_i**3.0_kreal)) * &
-        dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr))
+        dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr)))
         !dqr_dt__accretion_ice_rain_graupel_r = min(1.0_kreal, &
         !dqr_dt__accretion_ice_rain_graupel_r)
      endif
@@ -536,10 +536,11 @@ module mphys_with_ice
      real(kreal) :: lambda_r, lambda_h, wr1, wr2, wr3, wh1, wh2, wh3, f, &
      r_r, r_h, wr, wh
 
-     r_r = (qr*rho/(r4_3*pi*N_0r*rho_l))**r1_3
-     r_h = (qh*rho/(r4_3*pi*N_0h*rho_h))**r1_3
-     lambda_h = (8.0_kreal*rho_h*N_0h/(qh*rho))**0.25_kreal
-     lambda_r = (8.0_kreal*pi*(rho_l)/(qr*rho)*N_0r)**(0.25_kreal)
+
+     lambda_h = (8.0_kreal*pi*rho_h/(qh*rho)*N_0h)**0.25_kreal
+     lambda_r = (8.0_kreal*pi*rho_l/(qr*rho)*N_0r)**0.25_kreal
+     r_r = (qr*rho*lambda_r/(r4_3*pi*N_0r*rho_l))**r1_3
+     r_h = (qh*rho*lambda_h/(r4_3*pi*N_0h*rho_h))**r1_3
      wr1 = 2.0_kreal * rho_l * g * r_r**2
      wr2 = k_2 * rho_l * (rho/rho_g)**r1_2 * r_r
      wr3 = (8.0_kreal*rho_g*g/(3*C_Dr*rho_g))**r1_2
@@ -589,7 +590,7 @@ module mphys_with_ice
      !real(kreal) :: dqh_dt__accretion_cloud_graupel, dqr_dt__accretion_graupel
 
      ! can't do cond/evap without any rain-droplets present
-     if (qr == 0.0) then
+     if (qh .eq. 0.0) then
         dqr_dt__melting_graupel = 0.0_kreal
      else
         ! computer super/sub-saturation
@@ -597,8 +598,8 @@ module mphys_with_ice
         Sw = qv/qv_sat
 
         ! size-distribtion length-scale
-        l_h = (8.0_kreal*rho_h*N_0h/(qh*rho))**0.25_kreal
-        l_r = (8.0_kreal*pi*(rho_l)/(qr*rho)*N_0r)**(0.25_kreal)
+        l_h = (8.0_kreal*pi*rho_h/(qh*rho)*N_0h)**0.25_kreal
+        l_r = (8.0_kreal*pi*rho_l/(qr*rho)*N_0r)**0.25_kreal
 
         ! air condutivity and diffusion effects
         Ka = Ka_f(T)
@@ -617,25 +618,25 @@ module mphys_with_ice
         (2.0_kreal * a_h / nu)**0.5_kreal * (rho0 / rho_g)**0.25_kreal / &
         l_h**2.75_kreal
         f3 = (cp_l / Lf) * (T - T_0) * &
-        (dqh_dt__accretion_cloud_graupel_rain(ql, rho_g, rho, qh) + &
+        (dqh_dt__accretion_cloud_graupel_rain(ql, rho_g, rho, qh, T, qr) + &
          dqr_dt__accretion_graupel(qg, rho_g, qv, qh, rho, T, p, qr))
 
         ! compute rate of change of condensate from diffusion
-        dqr_dt__melting_graupel = (qg/rho_g) * N_0h * (2 * pi / Lf) &
+        dqr_dt__melting_graupel = N_0h * (2 * pi / Lf) &
         * f1 * f2 - f3
      endif
    end function
 
-   pure function dqr_dt__melting_ice(qg, rho_g, qv, qh, rho, T, p, qr, ql) !TODO: Fix from graupel to ice!
+   pure function dqr_dt__melting_ice(qg, rho_g, qv, qh, rho, T, p, qr, ql, qi) !TODO: Fix from graupel to ice!
      use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
      use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
      use microphysics_common, only: Ka_f => thermal_conductivity
      use microphysics_common, only: Dv_f => water_vapour_diffusivity
      use microphysics_common, only: dyn_visc_f => dynamic_viscosity
      use microphysics_constants, only: Lv => L_cond, Lf => L_fusi, R_v
-     use microphysics_constants, only: cp_l, pi, rho_l => rho_w
+     use microphysics_constants, only: cp_l, pi, rho_l => rho_w, temp0 => T0
 
-     real(kreal), intent(in) :: qg, rho_g, qv, qh, rho, T, p, qr, ql
+     real(kreal), intent(in) :: qg, rho_g, qv, qh, rho, T, p, qr, ql, qi
      real(kreal) :: dqr_dt__melting_ice
 
      real(kreal), parameter :: G2p75 = 1.608359421985546_kreal ! = Gamma(2.75)
@@ -660,7 +661,7 @@ module mphys_with_ice
      !real(kreal) :: dqh_dt__accretion_cloud_graupel, dqr_dt__accretion_graupel
 
      ! can't do cond/evap without any rain-droplets present
-     if (qr == 0.0) then
+     if (qi .eq. 0.0_kreal) then
         dqr_dt__melting_ice = 0.0_kreal
      else
         ! computer super/sub-saturation
@@ -689,15 +690,19 @@ module mphys_with_ice
         ! dqr_dt__accretion_graupel(qg, rho_g, qv, qh, rho, T, p, qr))
 
         ! compute rate of change of condensate from diffusion
-        dqr_dt__melting_ice = (qg/rho_g) * Ni * (2 * pi / Lf) &
-        * f1 * f2
+        if (T>temp0) then
+          dqr_dt__melting_ice = (qg/rho_g) * Ni * (2 * pi / Lf) &
+          * f1 * f2
+        else
+          dqr_dt__melting_ice = 0.0_kreal
+        endif
      endif
    end function
 
-   pure function dqh_dt__freezing_graupel(qh, rho, T) !TODO: Check negative sign
+   pure function dqh_dt__freezing_graupel(qh, rho, T, qr) !TODO: Check negative sign
      use microphysics_constants, only: pi, temp0 => T0, rho_l => rho_w
 
-     real(kreal), intent(in) :: qh, rho, T
+     real(kreal), intent(in) :: qh, rho, T, qr
      real(kreal) :: dqh_dt__freezing_graupel
      real(kreal), parameter :: rho_h = 470.0_kreal
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
@@ -705,20 +710,21 @@ module mphys_with_ice
      real(kreal), parameter :: A_prime = 0.66_kreal  ! [m^-4]
      real(kreal), parameter :: B_prime = 100.0_kreal  ! [m^-4]
 
-     real(kreal) :: lambda_h
+     real(kreal) :: lambda_h, lambda_r
      lambda_h = (8.0_kreal*pi*rho_h*N_0h/(qh*rho))**0.25_kreal
+     lambda_r = (8.0_kreal*pi*rho_l*N_0r/(qr*rho))**(0.25_kreal)
 
-     dqh_dt__freezing_graupel = min(1.0, &
-       1280.0_kreal/lambda_h**7.0_kreal * pi**2.0_kreal * &
+     dqh_dt__freezing_graupel = max(0.0_kreal, &
+       1280.0_kreal/lambda_r**7.0_kreal * pi**2.0_kreal * &
        B_prime * N_0r * (EXP(A_prime*(temp0-T))-1.0_kreal) * rho_l/rho)
    end function
 
    pure function dqi_dt__freezing_ice(ql, rho, T) !TODO: Check negative sign
-     use microphysics_constants, only: pi, temp0 => T0, rho_l => rho_w
+     use microphysics_constants, only: pi, temp0 => T0, rho_l => rho_w, epsmach
 
      real(kreal), intent(in) :: ql, rho, T
      real(kreal) :: dqi_dt__freezing_ice
-     real(kreal), parameter :: N_c = 200.*1.0e6_kreal  ! [m^-4]
+     real(kreal), parameter :: N_c = 200.*1.0e6_kreal  ! [m^-3]
      real(kreal), parameter :: A_prime = 0.66_kreal  ! [m^-4]
      real(kreal), parameter :: B_prime = 100.0_kreal  ! [m^-4]
      real(kreal), parameter :: r4_3 = 4.0_kreal / 3.0_kreal
@@ -727,8 +733,12 @@ module mphys_with_ice
      real(kreal) :: r_c
      r_c = (ql*rho/(r4_3*pi*N_c*rho_l))**r1_3
 
-     dqi_dt__freezing_ice = min(1.0, &
+     dqi_dt__freezing_ice = max(0.0_kreal, &
        16.0_kreal/9.0_kreal * pi**2 * r_c**6.0_kreal * &
        B_prime * N_c * (EXP(A_prime*(temp0-T))-1.0_kreal) * rho_l/rho)
+
+     ! if (dqi_dt__freezing_ice < epsmach) then
+     !   dqi_dt__freezing_ice = 0.0_kreal
+     ! endif
    end function
 end module mphys_with_ice

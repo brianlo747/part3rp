@@ -65,23 +65,30 @@ module integrator_species_rate
        dqhdt_autoconv = dqh_dt__autoconversion_ice_graupel(qi=qi, qg=qg, rho_g=rho_g, T=temp)
        dqrdt_accre_rc = dqr_dt__accretion_cloud_rain(ql=ql, rho_g=rho_g, rho=rho, qr=qr)
        dqhdt_accre_hi = dqh_dt__accretion_ice_graupel(qi=qi, rho_g=rho_g, qh=qh, T=temp)
-       dqldt_accre_chr= dqh_dt__accretion_cloud_graupel_rain(ql=ql, rho_g=rho_g, rho=rho, qh=qh)
+       dqldt_accre_chr= dqh_dt__accretion_cloud_graupel_rain(ql=ql, rho_g=rho_g, rho=rho, qh=qh, T=temp, qr=qr)
        dqhdt_accre_hiri= dqr_dt__accretion_ice_rain_graupel_i(qi=qi, rho_g=rho_g, rho=rho, qr=qr)
        dqhdt_accre_hirr= dqr_dt__accretion_ice_rain_graupel_r(qi=qi, ql=ql, rho=rho, rho_g=rho_g, qr=qr)
        dqhdt_accre_hr = dqr_dt__accretion_graupel(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr)
        dqrdt_melt_rh  = dqr_dt__melting_graupel(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr, ql=ql)
-       dqldt_melt_ci  = dqr_dt__melting_ice(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr, ql=ql)
-       dqhdt_freeze   = dqh_dt__freezing_graupel(qh=qh, rho=rho, T=temp)
+       dqldt_melt_ci  = dqr_dt__melting_ice(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr, ql=ql, qi=qi)
+       dqhdt_freeze   = dqh_dt__freezing_graupel(qh=qh, rho=rho, T=temp, qr=qr)
        dqidt_freeze   = dqi_dt__freezing_ice(ql=ql, rho=rho, T=temp)
 
        ! combine to create time derivatives for species
 
+
+       ! if (dqidt_freeze > 0.0_kreal) then
+       !   print *, dqidt_freeze
+       ! endif
        if (temp > temp0) then
+
          dydt(3) =  dqldt_condevap - dqrdt_autoconv &
-                  - dqrdt_accre_rc - dqldt_accre_chr &
+                  - dqrdt_accre_rc &
+                  - dqldt_accre_chr &
                   + dqldt_melt_ci
          dydt(4) =  dqrdt_condevap + dqrdt_autoconv &
-                  + dqrdt_accre_rc + dqldt_accre_chr - dqhdt_accre_hirr &
+                  + dqrdt_accre_rc &
+                  + dqldt_accre_chr - dqhdt_accre_hirr &
                   + dqrdt_melt_rh
          dydt(5) = -dqldt_condevap - dqrdt_condevap - dqhdt_condevap &
                   - dqidt_sublidep - dqhdt_sublidep
@@ -99,20 +106,32 @@ module integrator_species_rate
                  - dqldt_melt_ci))
 
        else
+
          dydt(3) =  dqldt_condevap - dqrdt_autoconv &
                   - dqrdt_accre_rc - dqldt_accre_chr &
-                  + dqldt_melt_ci  - dqidt_freeze
+                  + dqldt_melt_ci &
+
+                  - dqidt_freeze
          dydt(4) =  dqrdt_condevap + dqrdt_autoconv &
                   + dqrdt_accre_rc - dqhdt_accre_hirr &
-                  + dqrdt_melt_rh - dqhdt_freeze - dqhdt_accre_hr
+                  + dqrdt_melt_rh &
+
+                  - dqhdt_freeze &
+                  - dqhdt_accre_hr
+
          dydt(5) = -dqldt_condevap - dqrdt_condevap - dqhdt_condevap &
                   - dqidt_sublidep - dqhdt_sublidep
          dydt(6) = dqidt_sublidep - dqhdt_autoconv &
                   - dqhdt_accre_hi - dqhdt_accre_hiri &
-                  - dqldt_melt_ci + dqidt_freeze
+                  - dqldt_melt_ci &
+
+                  + dqidt_freeze
          dydt(7) = dqhdt_condevap + dqhdt_sublidep + dqhdt_autoconv &
                   + dqhdt_accre_hi + dqhdt_accre_hiri + dqhdt_accre_hirr &
-                  - dqrdt_melt_rh + dqhdt_freeze + dqldt_accre_chr + dqhdt_accre_hr
+                  - dqrdt_melt_rh &
+
+                  + dqhdt_freeze &
+                  + dqldt_accre_chr + dqhdt_accre_hr
 
 
          dydt(1) = & !(y(2)/100000._kreal)**(0.28591_kreal) * &

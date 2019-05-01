@@ -36,7 +36,7 @@ ax1.set_xlim(1.0e-8,1)
 ax1.legend()
 
 ax2 = ax1.twiny()
-color = 'tab:red'
+color = 'magenta'
 ax2.set_xlabel(r'Temperature / K', color=color)
 ax2.plot(temp,time, label=r'T', color=color)
 ax2.tick_params(axis='x', labelcolor=color)

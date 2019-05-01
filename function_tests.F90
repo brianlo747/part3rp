@@ -42,7 +42,7 @@ program function_tests
 
   print *, "dqldt_accre_chr"
   print *, dqh_dt__accretion_cloud_graupel_rain(0.01_kreal, 1.21_kreal, &
-  1.20_kreal, 0.01_kreal)
+  1.20_kreal, 0.01_kreal, 298._kreal, 0.01_kreal)
 
   print *, "dqhdt_accre_hiri"
   print *, dqr_dt__accretion_ice_rain_graupel_i(0.01_kreal, 1.2_kreal, &
@@ -62,11 +62,11 @@ program function_tests
 
   print *, "dqldt_melt_ci"
   print *, dqr_dt__melting_ice(0.01_kreal, 1.2_kreal, 0.01_kreal, 0.01_kreal, &
-  1.21_kreal, 298.0_kreal, 100000.0_kreal, 0.01_kreal, 0.01_kreal)
+  1.21_kreal, 298.0_kreal, 100000.0_kreal, 0.01_kreal, 0.01_kreal, 0.01_kreal)
 
   print *, "dqidt_freeze"
   print *, dqi_dt__freezing_ice(0.01_kreal, 1.2_kreal, 260.0_kreal)
 
   print *, "dqhdt_freeze"
-  print *, dqh_dt__freezing_graupel(0.1_kreal, 1.6_kreal, 260.0_kreal)
+  print *, dqh_dt__freezing_graupel(0.1_kreal, 1.6_kreal, 260.0_kreal, 0.01_kreal)
 end program function_tests

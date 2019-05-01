@@ -5,7 +5,7 @@ program integrator_tests
   !0.0_kreal, 100000.0_kreal, 298.0_kreal)
   real(kreal), dimension (1 : 7) :: y
   real(kreal) :: t_0 = 0.0_kreal
-  real(kreal) :: t_end=1000.0_kreal
+  real(kreal) :: t_end=7000.0_kreal
   real(kreal) :: t_step=10.0_kreal
   real(kreal) :: t_curr = 0.0_kreal
   real(kreal) :: qd, rho_curr
@@ -22,7 +22,7 @@ program integrator_tests
 
   do
     print *, "t =>", t_curr, sum(y(3:))
-    !print *, y
+    print *, y
     write(1,*) &
       t_curr,',',y(1),',',y(2),',',y(3),',',y(4),',',y(5),',',y(6),',',y(7)
 

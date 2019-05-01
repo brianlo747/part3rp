@@ -256,47 +256,47 @@ contains
 
     ! Calculate a timestep that would lead to a species reaching 0
     ! This is to ensure positive definite species values when integrating
-    dt_min__posdef = minval(abs(y/dydt0), y /= 0.0_kreal)
+    ! dt_min__posdef = minval(abs(y/dydt0), y /= 0.0_kreal)
 
     ! Check if positive definite timestep is not too small
-    if (dt_min__posdef > dt_min) then
-
-      ! Check if current timestep is too large for positive definite condition
-      if (dt > dt_min__posdef) then
-
-        ! Timestep too large for positive definite condition
-        if (debug) then
-          print *, "Adjusting integration step down, too big to be pos def"
-          print *, "dt dt_min__posdef, m", dt, dt_min__posdef, m
-          print *, ""
-        endif
-
-        ! Scaling includes half for safety
-        s = 0.5*dt_min__posdef/dt
-        dt = s*dt
-
-        if (debug) then
-          print *, "Initial timestep risks solution becoming negative, scaling timestep"
-          print *, "by s=", s
-          print *, "dt_new", dt
-        endif
-      endif
-    else
+    ! if (dt_min__posdef > dt_min) then
+    !
+    !   ! Check if current timestep is too large for positive definite condition
+    !   ! if (dt > dt_min__posdef) then
+    !
+    !     ! Timestep too large for positive definite condition
+    !     ! if (debug) then
+    !     !   print *, "Adjusting integration step down, too big to be pos def"
+    !     !   print *, "dt dt_min__posdef, m", dt, dt_min__posdef, m
+    !     !   print *, ""
+    !     ! endif
+    !
+    !     ! Scaling includes half for safety
+    !     ! s = 0.5*dt_min__posdef/dt
+    !     ! dt = s*dt
+    !
+    !     ! if (debug) then
+    !     !   print *, "Initial timestep risks solution becoming negative, scaling timestep"
+    !     !   print *, "by s=", s
+    !     !   print *, "dt_new", dt
+    !     ! endif
+    !   endif
+    ! else
 
       ! Timestep too small, smaller than the universally defined limit
-      if (debug) then
-        print *, "Timestep required for pos def is very small so we just take a single forward"
-        print *, "Euler step before runge-kutta integration"
-        print *, "dt dt_min, dt_min__posdef", dt, dt_min, dt_min__posdef
-        print *, "y=", y
-        print *, "dt__pd=", y/dydt0
-        print *, "dy=", dt_min__posdef*dydt0
-        print *, ""
-      endif
+      ! if (debug) then
+      !   print *, "Timestep required for pos def is very small so we just take a single forward"
+      !   print *, "Euler step before runge-kutta integration"
+      !   print *, "dt dt_min, dt_min__posdef", dt, dt_min, dt_min__posdef
+      !   print *, "y=", y
+      !   print *, "dt__pd=", y/dydt0
+      !   print *, "dy=", dt_min__posdef*dydt0
+      !   print *, ""
+      ! endif
 
       ! Euler step
-      y = y + dt_min__posdef*dydt0
-      t = t + dt_min__posdef
+      !y = y + dt_min__posdef*dydt0
+      !t = t + dt_min__posdef
 
       if (debug) then
         print *, "y_new=", y
@@ -307,7 +307,7 @@ contains
       where (y(:) < tiny(y(1)))
         y(:) = 0.0_kreal
       endwhere
-    endif
+    ! endif
 
     if (.not. done) then
       k1 = 0.0
@@ -327,16 +327,23 @@ contains
       y_n1 = fix_y_isometric(y, c1_1*k1 + c2_1*k2 + c3_1*k3 + c4_1*k4 + c5_1*k5, .false.)
       y_n2 = fix_y_isometric(y, c1_2*k1 + c2_2*k2 + c3_2*k3 + c4_2*k4 + c5_2*k5, .false.)
 
-      if (any(isnan(y_n2))) then
-        print *, y_n2
-      endif
+      ! if (any(isnan(y_n2))) then
+      !   print *, y_n2
+      ! endif
 
       abs_err = abs(y_n1 - y_n2)
       !abs_err = abs(1./6.*(k4 - k5))
 
-      ! TODO: make abs_tol and rel_tol vectors
       max_total_err = (abs_tol + rel_tol*abs(y_n2))
-      s = 0.84*(minval(max_total_err  * dt / abs_err, abs_err > 0.0))**0.25
+      s = 0.84*(minval(max_total_err * dt / abs_err, abs_err > 0.0_kreal))**0.25
+
+      ! if (t > 3380.0_kreal) then
+      !   print *, "dt"
+      !   print *, dt
+      !   print *, max_total_err(6)
+      !   print *, abs_err(6)
+      !   print *, max_total_err * dt / abs_err
+      ! endif
 
       ! Check to see if any solution is negative
       if (any(y_n2 < 0.0)) then
@@ -350,6 +357,10 @@ contains
           print *, "abs_err", abs_err
         endif
 
+        ! Finally, mass scale to deal with negative q species
+        call mass_scale(y_n2, msg)
+
+
         ! Check if s is large
         ! Large s suggests the current or a bigger timestep can be taken
         if (s > 1.0) then
@@ -357,8 +368,6 @@ contains
           done = .true.
         endif
 
-        ! Finally, mass scale to deal with negative q species
-        call mass_scale(y_n2, msg)
       endif
 
       if (debug) then
@@ -397,6 +406,9 @@ contains
       endif
 
       dt = dt*s
+      if (dt < dt_min) then
+        dt = dt_min
+      endif
 
       ! Recursive call if integration isn't complete yet
       if (.not. done) then
