@@ -1,7 +1,4 @@
-!> Simple microphysics implementation which only supports the creation of cloud
-!> water from water vapour and rain-droplets through auto-conversion and
-!> accretion, no ice-phases are included.
-!TODO: 50 for clean sea 200e6 for cleanland 2000 sea/land
+!> Microphysics implementation
 
 module mphys_with_ice
    !use microphysics_register, only: register_variable
@@ -25,21 +22,22 @@ module mphys_with_ice
    end function rho_f
 
    !> Condesation/evaporation of cloud-water droplets
-   pure function dql_dt__condensation_evaporation(rho, rho_g, qv, ql, T, p)
-      use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
-      use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
+   function dql_dt__condensation_evaporation(rho, rho_g, qv, ql, T, p)
+      use microphysics_common, only: pv_sat_f => saturation_vapour_pressure_water
+      use microphysics_common, only: qv_sat_f => saturation_vapour_concentration_water
       use microphysics_common, only: Ka_f => thermal_conductivity
       use microphysics_common, only: Dv_f => water_vapour_diffusivity
       use microphysics_constants, only: Lv => L_cond, R_v
       use microphysics_constants, only: pi, rho_l => rho_w
+      use integrator_config, only: Nc => N_cloud
 
       real(kreal), intent(in) :: rho, rho_g, qv, ql, T, p
       real(kreal) :: dql_dt__condensation_evaporation
 
       real(kreal), parameter :: r0 = 0.1e-6_kreal  ! initial cloud droplet radius
-      real(kreal), parameter :: N0 = 200.*1.0e6_kreal  ! initial cloud droplet number
+      !real(kreal), parameter :: Nc = 200.*1.0e6_kreal  ! initial cloud droplet number
 
-      real(kreal) :: r_c, Nc
+      real(kreal) :: r_c
       real(kreal) :: pv_sat, qv_sat, Sw
       real(kreal) :: Dv, Fd
       real(kreal) :: Ka, Fk
@@ -53,10 +51,10 @@ module mphys_with_ice
       Sw = qv/qv_sat
 
       ! calculate radius of cloud droplet
-      r_c = (ql*rho/(r4_3*pi*N0*rho_l))**r1_3
+      r_c = (ql*rho/(r4_3*pi*Nc*rho_l))**r1_3
 
       ! don't allow evaporation if the droplets are smaller than the
-      ! aerosol, there's nothing to evaporate then(!)
+      ! aerosol, there's nothing to evaporate then
       if (Sw < 1.0_kreal) then
          if (r_c < r0) then
             r_c = 0.0_kreal
@@ -65,9 +63,6 @@ module mphys_with_ice
       else
          r_c = max(r_c, r0)
       endif
-
-      ! Setting cloud droplet concentraion to constant
-      Nc = N0
 
       ! Calculation of diffusion F_d and heat F_k terms
 
@@ -79,6 +74,7 @@ module mphys_with_ice
 
       ! Compute rate of change of condensate from diffusion
       dql_dt__condensation_evaporation = 4.0_kreal*pi*Nc/rho*r_c*(Sw - 1.0_kreal)/(Fk + Fd)
+      !print *, Sw
 
    end function dql_dt__condensation_evaporation
 
@@ -88,8 +84,8 @@ module mphys_with_ice
    !>
    !>     N(r)dr = N0 exp(-l*r) dr
    pure function dqr_dt__condensation_evaporation(qv, qr, rho, T, p)
-      use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
-      use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
+      use microphysics_common, only: pv_sat_f => saturation_vapour_pressure_water
+      use microphysics_common, only: qv_sat_f => saturation_vapour_concentration_water
       use microphysics_common, only: Ka_f => thermal_conductivity
       use microphysics_common, only: Dv_f => water_vapour_diffusivity
       use microphysics_common, only: dyn_visc_f => dynamic_viscosity
@@ -149,8 +145,8 @@ module mphys_with_ice
    end function
 
    pure function dqh_dt__condensation_evaporation(qv, qh, rho, T, p)
-      use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
-      use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
+      use microphysics_common, only: pv_sat_f => saturation_vapour_pressure_water
+      use microphysics_common, only: qv_sat_f => saturation_vapour_concentration_water
       use microphysics_common, only: Ka_f => thermal_conductivity
       use microphysics_common, only: Dv_f => water_vapour_diffusivity
       use microphysics_common, only: dyn_visc_f => dynamic_viscosity
@@ -210,38 +206,47 @@ module mphys_with_ice
       endif
    end function
 
-   pure function dqi_dt__sublimation_deposition(qi, rho, T, p) ! TODO: Check sat pressure!!
+  function dqi_dt__sublimation_deposition(qi, qv, rho, T, p)
      use microphysics_constants, only: pi, rho_i, temp0 => T0
      use microphysics_constants, only: Ls => L_subl, R_v
-     use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
-     use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
+     use microphysics_common, only: pv_sat_f => saturation_vapour_pressure_ice
+     use microphysics_common, only: qv_sat_f => saturation_vapour_concentration_ice
      use microphysics_common, only: Ka_f => thermal_conductivity
      use microphysics_common, only: Dv_f => water_vapour_diffusivity
-
+     use integrator_config, only: N_i => N_cloud
 
      real(kreal) :: dqi_dt__sublimation_deposition
-     real(kreal), intent(in) :: qi, rho, T, p
+     real(kreal), intent(in) :: qi, qv, rho, T, p
      real(kreal), parameter :: m_i = 1.0e-12_kreal
-     real(kreal), parameter :: N_0f = 1.0e-2_kreal
-     real(kreal), parameter :: beta = 0.6_kreal
+     real(kreal), parameter :: N_0f = 5.0_kreal
+     real(kreal), parameter :: beta = 0.304_kreal
      !real(kreal), parameter :: T_0 = 273.15_kreal
      real(kreal), parameter :: r4_3 = 4.0_kreal/3.0_kreal
      real(kreal), parameter :: r1_3 = 1.0_kreal/3.0_kreal
 
      real(kreal) :: N_f, Dv, Fd_prime, Fk_prime, Ka, qi_sat, pv_sat, Si
-     real(kreal) :: r_i
+     real(kreal) :: r_i, r_i_const
 
      if (qi == 0.0 .OR. T > temp0) then
         dqi_dt__sublimation_deposition = 0.0_kreal
      else
 
-       N_f = N_0f * EXP(beta * (temp0 - T)) ! Cooper parameterisation
+       if (T > 233.0_kreal) then
+         N_f = N_0f * EXP(beta * (temp0 - T)) ! Cooper parameterisation
+       else
+         N_f = N_0f * EXP(beta * (temp0 - 233.0_kreal))
+       endif
 
        r_i = (qi*rho/(r4_3*pi*N_f*rho_i))**r1_3
+       r_i_const = 50.0*1.0e-6_kreal
+       !If Ni > Nf, use fixed radius from literature, otherwise use Cooper
+       if (r_i > r_i_const) then
+         r_i = r_i_const
+       endif
 
        ! calculate super/sub-saturation
        qi_sat = qv_sat_f(T, p)
-       Si = qi/qi_sat
+       Si = qv/qi_sat
 
        ! air condutivity and diffusion effects
        Ka = Ka_f(T)
@@ -252,16 +257,17 @@ module mphys_with_ice
        Fd_prime = R_v*T/(pv_sat*Dv)
 
        dqi_dt__sublimation_deposition = 1.6_kreal*4.0_kreal*pi*N_f/rho*r_i * &
-       (Si - 1.0)/(Fk_prime + Fd_prime)
+            (Si - 1.0)/(Fk_prime + Fd_prime)
 
-       dqi_dt__sublimation_deposition = max(0.0_kreal, &
-       dqi_dt__sublimation_deposition)
-     endif
+      endif
+
+       !print *, dqi_dt__sublimation_deposition
+     !endif
    end function
 
-   pure function dqh_dt__sublimation_evaporation(qg, qv, qh, rho, T, p) ! TODO: Check sat pressure!!
-     use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
-     use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
+   pure function dqh_dt__sublimation_evaporation(qg, qv, qh, rho, T, p)
+     use microphysics_common, only: pv_sat_f => saturation_vapour_pressure_ice
+     use microphysics_common, only: qv_sat_f => saturation_vapour_concentration_ice
      use microphysics_common, only: Ka_f => thermal_conductivity
      use microphysics_common, only: Dv_f => water_vapour_diffusivity
      use microphysics_common, only: dyn_visc_f => dynamic_viscosity
@@ -295,7 +301,7 @@ module mphys_with_ice
      else
         ! computer super/sub-saturation
         qh_sat = qv_sat_f(T, p)
-        Sh = qh/qh_sat
+        Sh = qv/qh_sat
 
         ! size-distribtion length-scale
         l_h = (8.0_kreal*rho_h*N_0h/(qh*rho))**0.25_kreal
@@ -320,15 +326,77 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqr_dt__autoconversion(ql, qg, rho_g, T)
-      real(kreal), intent(in) :: ql, qg, rho_g, T
+   ! pure function dqr_dt__autoconversion(ql, qg, rho_g, T, qv, rho)
+   !    ! Kessler
+   !    real(kreal), intent(in) :: ql, qg, rho_g, T, qv, rho
+   !    real(kreal) :: dqr_dt__autoconversion
+   !
+   !    real(kreal), parameter :: k_c = 1.0e-3_kreal, a_c = 5.0e-4_kreal
+   !
+   !    dqr_dt__autoconversion = k_c*(ql - qg/rho_g*a_c)
+   !    dqr_dt__autoconversion = max(0.0_kreal, dqr_dt__autoconversion)
+   ! end function
+
+   ! function dqr_dt__autoconversion(ql, qg, rho_g, T, qv, rho)
+   !    ! Berry Digest
+   !    use microphysics_constants, only: pi, rho_l => rho_w
+   !
+   !    real(kreal), intent(in) :: ql, qg, rho_g, T, qv, rho
+   !    real(kreal) :: D_mean
+   !    real(kreal) :: dqr_dt__autoconversion
+   !
+   !    real(kreal), parameter :: r1_3 = 1.0_kreal/3.0_kreal
+   !
+   !    real(kreal), parameter :: shape_nu = 1.0_kreal
+   !    real(kreal), parameter :: shape_c = 3.0_kreal
+   !    real(kreal), parameter :: Nc = 200.*1.0e6_kreal
+   !
+   !    real(kreal), parameter :: a_1 = 9.74e16_kreal
+   !    real(kreal), parameter :: a_2 = 10.8e-3_kreal
+   !    real(kreal), parameter :: a_3 = 1.124836e5_kreal
+   !    real(kreal), parameter :: a_4 = 2.027_kreal
+   !
+   !    D_mean = ((6 * ql * rho)/(pi * rho_l * Nc))**r1_3 &
+   !      * ((GAMMA(shape_nu) * GAMMA(shape_nu + 1.0_kreal/shape_c)**3.0_kreal) &
+   !      / (GAMMA(shape_nu + 3.0_kreal/shape_c) * GAMMA(shape_nu)**3.0_kreal))**r1_3
+   !
+   !    dqr_dt__autoconversion = max(0.0_kreal, a_1 * D_mean ** 4.0_kreal - a_2) &
+   !      * max(0.0_kreal, a_3 * D_mean - a_4) * rho * ql**2.0_kreal
+   !
+   !    print *, dqr_dt__autoconversion
+   ! end function
+
+   function dqr_dt__autoconversion(ql, qg, rho_g, T, qv, rho)
+      ! Berry Thompson
+      use microphysics_constants, only: pi, rho_l => rho_w
+      use integrator_config, only: Nc => N_cloud
+
+      real(kreal), intent(in) :: ql, qg, rho_g, T, qv, rho
+      real(kreal) :: D_mean
       real(kreal) :: dqr_dt__autoconversion
 
-      real(kreal), parameter :: k_c = 1.0e-3_kreal, a_c = 5.0e-4_kreal
+      real(kreal), parameter :: r1_2 = 1.0_kreal/2.0_kreal
+      real(kreal), parameter :: r1_3 = 1.0_kreal/3.0_kreal
+      real(kreal), parameter :: r1_6 = 1.0_kreal/6.0_kreal
 
-      ! TODO: what happens if ql < qg ?
-      dqr_dt__autoconversion = k_c*(ql - qg/rho_g*a_c)
-      dqr_dt__autoconversion = max(0.0_kreal, dqr_dt__autoconversion)
+      real(kreal), parameter :: shape_nu = 3.0_kreal
+      !real(kreal), parameter :: Nc = 200.*1.0e6_kreal
+
+      real(kreal), parameter :: a_1 = 2.7e-2_kreal
+      real(kreal), parameter :: a_2 = 1.0_kreal/16.0_kreal * 1e20_kreal
+      real(kreal), parameter :: a_3 = 0.4_kreal
+      real(kreal), parameter :: a_4 = 3.7_kreal
+      real(kreal), parameter :: a_5 = 0.5e6_kreal
+      real(kreal), parameter :: a_6 = 7.5_kreal
+
+
+      D_mean = ((6 * ql * rho)/(pi * rho_l * Nc))**r1_3
+
+      dqr_dt__autoconversion = max(0.0_kreal, &
+        a_1 * ql**2 * rho * (a_2 * D_mean ** 4.0_kreal / (1+shape_nu)**r1_2 - a_3) &
+        * (a_5 * D_mean / (1+shape_nu)**r1_6 - a_6) &
+        / a_4)
+
    end function
 
    pure function dqh_dt__autoconversion_ice_graupel(qi, qg, rho_g, T)
@@ -345,9 +413,8 @@ module mphys_with_ice
        dqh_dt__autoconversion_ice_graupel  = 0.0_kreal
 
      else
-       k_i = 1.0e-3_kreal * EXP(0.025_kreal * (T - temp0)) !TODO: Check T dependence
+       k_i = 1.0e-3_kreal * EXP(0.025_kreal * (T - temp0))
 
-       ! TODO: what happens if ql < qg ?
        dqh_dt__autoconversion_ice_graupel = k_i*(qi - qg/rho_g*a_i)
        dqh_dt__autoconversion_ice_graupel = max(0.0_kreal, &
        dqh_dt__autoconversion_ice_graupel)
@@ -417,7 +484,7 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqh_dt__accretion_cloud_graupel_rain(ql, rho_g, rho, qh, T, qr) !TODO: Rate too big as well?
+   pure function dqh_dt__accretion_cloud_graupel_rain(ql, rho_g, rho, qh, T, qr)
      !Equation 20
      use microphysics_constants, only: pi, rho_l => rho_w, temp0 => T0
 
@@ -448,7 +515,7 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr) !TODO: Rate too big as well?
+   pure function dqr_dt__accretion_ice_rain_graupel_i(qi, rho_g, rho, qr)
      !Equation 21
      use microphysics_constants, only: pi, rho_l => rho_w
 
@@ -478,25 +545,41 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqr_dt__accretion_ice_rain_graupel_r(qi, ql, rho, rho_g, qr) !TODO: Rate too big as well, defaulting to min?
+   pure function dqr_dt__accretion_ice_rain_graupel_r(qi, ql, rho, rho_g, qr, T)
      !Equation 21
-     use microphysics_constants, only: pi, rho_l => rho_w
+     use microphysics_constants, only: pi, rho_l => rho_w, rho_i, temp0 => T0
+     use integrator_config, only: Ni => N_cloud
 
-     real(kreal), intent(in) :: qi, ql, rho, rho_g, qr
+     real(kreal), intent(in) :: qi, ql, rho, rho_g, qr, T
      real(kreal) :: dqr_dt__accretion_ice_rain_graupel_r
 
      real(kreal), parameter :: G3p5 = 3.32335097045_kreal  ! = Gamma(3.5)
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
-     real(kreal), parameter :: Ni = 200.*1.0e6_kreal
+     !real(kreal), parameter :: Ni = 200.*1.0e6_kreal
+     real(kreal), parameter :: N_0f = 5.0_kreal
+     real(kreal), parameter :: beta = 0.304_kreal
      real(kreal), parameter :: a_r = 201.0_kreal  ! [m^.5 s^-1]
      real(kreal), parameter :: rho0 = 1.12_kreal
      real(kreal), parameter :: r4_3 = 4.0_kreal/3.0_kreal
      real(kreal), parameter :: r1_3 = 1.0_kreal/3.0_kreal
 
-     real(kreal) :: lambda_r, r_i
+     real(kreal) :: lambda_r, r_i, N_f, r_i_const
 
      ! Radius of ice
-     r_i = (ql*rho/(r4_3*pi*Ni*rho_l))**r1_3
+     ! r_i = (ql*rho/(r4_3*pi*Ni*rho_l))**r1_3
+
+     ! if (T > 233.0_kreal) then
+     !   N_f = N_0f * EXP(beta * (temp0 - T)) ! Cooper parameterisation
+     ! else
+     !   N_f = N_0f * EXP(beta * (temp0 - 233.0_kreal))
+     ! endif
+     !
+     ! r_i = (qi*rho/(r4_3*pi*N_f*rho_i))**r1_3
+     r_i = 50.0*1.0e-6_kreal
+     !If Ni > Nf, use fixed radius from literature, otherwise use Cooper
+     ! if (r_i > r_i_const) then
+     !   r_i = r_i_const
+     ! endif
 
      ! If there is no rain available to perform accretion there is no need to calculate the accretion rate (also avoids
      ! divide-by-zero, see https://github.com/leifdenby/unified-microphysics/issues/5)
@@ -515,16 +598,15 @@ module mphys_with_ice
      endif
    end function
 
-   pure function dqr_dt__accretion_graupel(qg, rho_g, qv, qh, rho, T, p, qr) !TODO: Confirm no T dep?
+   function dqr_dt__accretion_graupel(qg, rho_g, qv, qh, rho, T, p, qr, ql)
 
-     use microphysics_constants, only: pi, rho_l => rho_w
+     use microphysics_constants, only: pi, rho_l => rho_w, rho_h
+     use microphysics_common, only: dyn_visc_f => dynamic_viscosity
 
-     real(kreal), intent(in) :: qg, rho_g, qv, qh, rho, T, p, qr
+     real(kreal), intent(in) :: qg, rho_g, qv, qh, rho, T, p, qr, ql
      real(kreal) :: dqr_dt__accretion_graupel
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
      real(kreal), parameter :: N_0h = 1.21e4_kreal  ! [m^-4]
-     real(kreal), parameter :: rho0 = 1.12_kreal
-     real(kreal), parameter :: rho_h = 470.0_kreal
      real(kreal), parameter :: g = 9.80665_kreal
      real(kreal), parameter :: r4_3 = 4.0_kreal / 3.0_kreal
      real(kreal), parameter :: r1_3 = 1.0_kreal / 3.0_kreal
@@ -536,34 +618,39 @@ module mphys_with_ice
      real(kreal) :: lambda_r, lambda_h, wr1, wr2, wr3, wh1, wh2, wh3, f, &
      r_r, r_h, wr, wh
 
+     if (qh .eq. 0.0_kreal .or. qr .eq. 0.0_kreal) then
+       dqr_dt__accretion_graupel = 0.0_kreal
+     else
+       lambda_h = (8.0_kreal*pi*rho_h/(qh*rho)*N_0h)**0.25_kreal
+       lambda_r = (8.0_kreal*pi*rho_l/(qr*rho)*N_0r)**0.25_kreal
+       r_r = (qr*rho*lambda_r/(r4_3*pi*N_0r*rho_l))**r1_3
+       r_h = (qh*rho*lambda_h/(r4_3*pi*N_0h*rho_h))**r1_3
+       wr1 = 2.0_kreal * rho_l * g * r_r**2 / (9.0_kreal * dyn_visc_f(T))
+       wr2 = k_2 * rho_l * (rho/rho_g)**r1_2 * r_r
+       wr3 = (8.0_kreal*rho_l*g*r_r/(3.0_kreal*C_Dr*rho_g))**r1_2
+       wr = min(wr1,min(wr2,wr3))
+       wh1 = 2.0_kreal * rho_h * g * r_h**2 / (9.0_kreal * dyn_visc_f(T))
+       wh2 = k_2 * rho_h * (rho/rho_g)**r1_2 * r_h
+       wh3 = (8.0_kreal*rho_h*g*r_h/(3.0_kreal*C_Dh*rho_g))**r1_2
+       wh = min(wh1,min(wh2,wh3))
 
-     lambda_h = (8.0_kreal*pi*rho_h/(qh*rho)*N_0h)**0.25_kreal
-     lambda_r = (8.0_kreal*pi*rho_l/(qr*rho)*N_0r)**0.25_kreal
-     r_r = (qr*rho*lambda_r/(r4_3*pi*N_0r*rho_l))**r1_3
-     r_h = (qh*rho*lambda_h/(r4_3*pi*N_0h*rho_h))**r1_3
-     wr1 = 2.0_kreal * rho_l * g * r_r**2
-     wr2 = k_2 * rho_l * (rho/rho_g)**r1_2 * r_r
-     wr3 = (8.0_kreal*rho_g*g/(3*C_Dr*rho_g))**r1_2
-     wr = min(wr1,min(wr2,wr3))
-     wh1 = 2.0_kreal * rho_h * g * r_h**2
-     wh2 = k_2 * rho_l * (rho/rho_g)**r1_2 * r_r
-     wh3 = (8.0_kreal*rho_g*g/(3*C_Dh*rho_g))**r1_2
-     wh = min(wh1,min(wh2,wh3))
-     f = ((5.0_kreal/(lambda_r**6 * lambda_h)) + &
-     (2.0_kreal/(lambda_r**5 * lambda_h**2)) + &
-     (0.5_kreal/(lambda_r**4 * lambda_h**3)))
-     dqr_dt__accretion_graupel = pi**2 * (rho_l / rho) * &
-     N_0r * N_0h * ABS(wr - wh)*f
+       f = ((160.0_kreal/(lambda_r**6 * lambda_h)) + &
+       (64.0_kreal/(lambda_r**5 * lambda_h**2)) + &
+       (16.0_kreal/(lambda_r**4 * lambda_h**3)))
+       dqr_dt__accretion_graupel = pi**2 * (rho_l / rho) * &
+       N_0r * N_0h * ABS(wr - wh)*f*qr
+     endif
+
    end function
 
-   pure function dqr_dt__melting_graupel(qg, rho_g, qv, qh, rho, T, p, qr, ql) !TODO: Check negative sign
-     use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
-     use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
+   function dqr_dt__melting_graupel(qg, rho_g, qv, qh, rho, T, p, qr, ql)
+     use microphysics_common, only: pv_sat_f => saturation_vapour_pressure_water
+     use microphysics_common, only: qv_sat_f => saturation_vapour_concentration_water
      use microphysics_common, only: Ka_f => thermal_conductivity
      use microphysics_common, only: Dv_f => water_vapour_diffusivity
      use microphysics_common, only: dyn_visc_f => dynamic_viscosity
      use microphysics_constants, only: Lv => L_cond, Lf => L_fusi, R_v
-     use microphysics_constants, only: cp_l, pi, rho_l => rho_w
+     use microphysics_constants, only: cp_l, pi, rho_l => rho_w, temp0 => T0
 
      real(kreal), intent(in) :: qg, rho_g, qv, qh, rho, T, p, qr, ql
      real(kreal) :: dqr_dt__melting_graupel
@@ -619,22 +706,27 @@ module mphys_with_ice
         l_h**2.75_kreal
         f3 = (cp_l / Lf) * (T - T_0) * &
         (dqh_dt__accretion_cloud_graupel_rain(ql, rho_g, rho, qh, T, qr) + &
-         dqr_dt__accretion_graupel(qg, rho_g, qv, qh, rho, T, p, qr))
+         dqr_dt__accretion_graupel(qg, rho_g, qv, qh, rho, T, p, qr, ql))
 
         ! compute rate of change of condensate from diffusion
-        dqr_dt__melting_graupel = N_0h * (2 * pi / Lf) &
-        * f1 * f2 - f3
+        if (T>temp0) then
+          dqr_dt__melting_graupel = max(0.0_kreal, &
+          N_0h * (2 * pi / Lf) * f1 * f2 - f3)
+        else
+          dqr_dt__melting_graupel = 0.0_kreal
+        endif
      endif
    end function
 
-   pure function dqr_dt__melting_ice(qg, rho_g, qv, qh, rho, T, p, qr, ql, qi) !TODO: Fix from graupel to ice!
-     use microphysics_common, only: pv_sat_f => saturation_vapour_pressure
-     use microphysics_common, only: qv_sat_f => saturation_vapour_concentration
+   pure function dqr_dt__melting_ice(qg, rho_g, qv, qh, rho, T, p, qr, ql, qi)
+     use microphysics_common, only: pv_sat_f => saturation_vapour_pressure_water
+     use microphysics_common, only: qv_sat_f => saturation_vapour_concentration_water
      use microphysics_common, only: Ka_f => thermal_conductivity
      use microphysics_common, only: Dv_f => water_vapour_diffusivity
      use microphysics_common, only: dyn_visc_f => dynamic_viscosity
      use microphysics_constants, only: Lv => L_cond, Lf => L_fusi, R_v
      use microphysics_constants, only: cp_l, pi, rho_l => rho_w, temp0 => T0
+     use integrator_config, only: Ni => N_cloud
 
      real(kreal), intent(in) :: qg, rho_g, qv, qh, rho, T, p, qr, ql, qi
      real(kreal) :: dqr_dt__melting_ice
@@ -643,7 +735,7 @@ module mphys_with_ice
 
      ! droplet-size distribution constant
      real(kreal), parameter :: N_0r = 1.e7_kreal  ! [m^-4]
-     real(kreal), parameter :: Ni = 200.*1.0e6_kreal
+     !real(kreal), parameter :: Ni = 200.*1.0e6_kreal
 
      ! fall-speed coefficient taken from the r > 0.5mm expression for
      ! fall-speed from Herzog '98
@@ -691,15 +783,15 @@ module mphys_with_ice
 
         ! compute rate of change of condensate from diffusion
         if (T>temp0) then
-          dqr_dt__melting_ice = (qg/rho_g) * Ni * (2 * pi / Lf) &
-          * f1 * f2
+          dqr_dt__melting_ice = max(0.0_kreal, &
+          (qg/rho_g) * Ni * (2 * pi / Lf) * f1 * f2)
         else
           dqr_dt__melting_ice = 0.0_kreal
         endif
      endif
    end function
 
-   pure function dqh_dt__freezing_graupel(qh, rho, T, qr) !TODO: Check negative sign
+   pure function dqh_dt__freezing_graupel(qh, rho, T, qr)
      use microphysics_constants, only: pi, temp0 => T0, rho_l => rho_w
 
      real(kreal), intent(in) :: qh, rho, T, qr
@@ -719,23 +811,43 @@ module mphys_with_ice
        B_prime * N_0r * (EXP(A_prime*(temp0-T))-1.0_kreal) * rho_l/rho)
    end function
 
-   pure function dqi_dt__freezing_ice(ql, rho, T) !TODO: Check negative sign
+   function dqi_dt__freezing_ice(ql, rho, T, qv, p)
      use microphysics_constants, only: pi, temp0 => T0, rho_l => rho_w, epsmach
+     use microphysics_common, only: pv_sat_f => saturation_vapour_pressure_water
+     use microphysics_common, only: qv_sat_f => saturation_vapour_concentration_water
+     use integrator_config, only: Nc => N_cloud
 
-     real(kreal), intent(in) :: ql, rho, T
+     real(kreal), intent(in) :: ql, rho, T, qv, p
+     real(kreal) :: qv_sat, pv_sat, Sw
      real(kreal) :: dqi_dt__freezing_ice
-     real(kreal), parameter :: N_c = 200.*1.0e6_kreal  ! [m^-3]
+     !real(kreal), parameter :: N_c = 200.*1.0e6_kreal  ! [m^-3]
      real(kreal), parameter :: A_prime = 0.66_kreal  ! [m^-4]
      real(kreal), parameter :: B_prime = 100.0_kreal  ! [m^-4]
      real(kreal), parameter :: r4_3 = 4.0_kreal / 3.0_kreal
      real(kreal), parameter :: r1_3 = 1.0_kreal / 3.0_kreal
+     real(kreal), parameter :: r0 = 0.1e-6_kreal  ! initial cloud droplet radius
 
      real(kreal) :: r_c
-     r_c = (ql*rho/(r4_3*pi*N_c*rho_l))**r1_3
+     r_c = (ql*rho/(r4_3*pi*Nc*rho_l))**r1_3
+
+     pv_sat = pv_sat_f(T)
+     qv_sat = qv_sat_f(T, p)
+     Sw = qv/qv_sat
+
+     if (Sw < 1.0_kreal) then
+        if (r_c < r0) then
+           r_c = 0.0_kreal
+        else
+        endif
+     else
+        r_c = max(r_c, r0)
+     endif
 
      dqi_dt__freezing_ice = max(0.0_kreal, &
        16.0_kreal/9.0_kreal * pi**2 * r_c**6.0_kreal * &
-       B_prime * N_c * (EXP(A_prime*(temp0-T))-1.0_kreal) * rho_l/rho)
+       B_prime * Nc * (EXP(A_prime*(temp0-T))-1.0_kreal) * rho_l/rho)
+
+     ! print *, dqi_dt__freezing_ice
 
      ! if (dqi_dt__freezing_ice < epsmach) then
      !   dqi_dt__freezing_ice = 0.0_kreal

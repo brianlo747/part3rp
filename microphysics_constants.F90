@@ -36,13 +36,13 @@ module microphysics_constants
    real(kreal), parameter :: R_d = cp_d - cv_d
 
    ! latent heat of fusion [J/kg]
-   real(kreal), parameter :: L_fusi = 3337.0*1.0e2_kreal
+   real(kreal), parameter :: L_fusi = 333.149*1.0e3_kreal
 
    ! latent heat of condensation [J/kg]
-   real(kreal), parameter :: L_cond = 2500.8*1.0e3_kreal
+   real(kreal), parameter :: L_cond = 2500.72*1.0e3_kreal
 
    ! laten heat of sublimation [J/kg]
-   real(kreal), parameter :: L_subl = 2834.1*1.0e3_kreal
+   real(kreal), parameter :: L_subl = 2833.81*1.0e3_kreal
 
    ! density of water [kg/m3]
    real(kreal), parameter :: rho_w = 1.0e3_kreal
@@ -53,7 +53,9 @@ module microphysics_constants
    real(kreal), parameter :: epsmach = 1.0e-15_kreal
    real(kreal), parameter :: ps0 = 101325.0
 
+   ! Important physical constants
    real(kreal), parameter :: pi = 3.141592653589793238462643_kreal
+   real(kreal), parameter :: g_earth = 9.80665_kreal
 
    ! Create a placeholder value that we can assign to variables for initial
    ! value, this way it will be clear if a variable hasn't been assigned

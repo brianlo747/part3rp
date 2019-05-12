@@ -26,34 +26,57 @@ module microphysics_common
          water_vapour_diffusivity=a_D*(temp/temp0)**b_D*100000./(pressure)
       end function water_vapour_diffusivity
 
-      pure function saturation_vapour_pressure(temp)
+      pure function saturation_vapour_pressure_water(temp)
          use microphysics_constants, only: epsmach, temp0 => T0, p0vs, a0_lq, a1_lq, a0_ice, a1_ice
 
-         real(kreal) :: saturation_vapour_pressure
+         real(kreal) :: saturation_vapour_pressure_water
          real(kreal), intent(in) :: temp
 
          real(kreal) :: expon2, satpw
 
-         if (temp > temp0) then
-             expon2=a0_lq*(temp-temp0)/max(temp+a1_lq,epsmach)
-         else
-             expon2=a0_ice*(temp-temp0)/max(temp+a1_ice,epsmach)
-         endif
-         saturation_vapour_pressure=p0vs*exp(expon2)
-      end function saturation_vapour_pressure
+         expon2=a0_lq*(temp-temp0)/max(temp+a1_lq,epsmach)
 
-      pure function saturation_vapour_concentration(temp, p)
+         saturation_vapour_pressure_water=p0vs*exp(expon2)
+      end function saturation_vapour_pressure_water
+
+      pure function saturation_vapour_concentration_water(temp, p)
          use microphysics_constants, only: epsmach, temp0 => T0, R_v, R_d
 
          real(kreal), intent(in) :: temp, p
-         real(kreal) :: saturation_vapour_concentration
+         real(kreal) :: saturation_vapour_concentration_water
 
          real(kreal) :: pv_sat, eps
 
-         pv_sat = saturation_vapour_pressure(temp)
+         pv_sat = saturation_vapour_pressure_water(temp)
          eps = R_d/R_v
-         saturation_vapour_concentration = (eps*pv_sat)/(p-(1.-eps)*pv_sat)
-      end function saturation_vapour_concentration
+         saturation_vapour_concentration_water = (eps*pv_sat)/(p-(1.-eps)*pv_sat)
+      end function saturation_vapour_concentration_water
+
+      pure function saturation_vapour_pressure_ice(temp)
+         use microphysics_constants, only: epsmach, temp0 => T0, p0vs, a0_lq, a1_lq, a0_ice, a1_ice
+
+         real(kreal) :: saturation_vapour_pressure_ice
+         real(kreal), intent(in) :: temp
+
+         real(kreal) :: expon2, satpw
+
+         expon2=a0_ice*(temp-temp0)/max(temp+a1_ice,epsmach)
+
+         saturation_vapour_pressure_ice=p0vs*exp(expon2)
+      end function saturation_vapour_pressure_ice
+
+      pure function saturation_vapour_concentration_ice(temp, p)
+         use microphysics_constants, only: epsmach, temp0 => T0, R_v, R_d
+
+         real(kreal), intent(in) :: temp, p
+         real(kreal) :: saturation_vapour_concentration_ice
+
+         real(kreal) :: pv_sat, eps
+
+         pv_sat = saturation_vapour_pressure_ice(temp)
+         eps = R_d/R_v
+         saturation_vapour_concentration_ice = (eps*pv_sat)/(p-(1.-eps)*pv_sat)
+      end function saturation_vapour_concentration_ice
 
       !> Calculate dynamic viscosity using parameterisation from Rogers & Yau
       !> 1989

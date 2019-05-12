@@ -18,24 +18,89 @@ contains
 
   subroutine mass_scale(y, msg)
 
-    real(8), intent(inout), dimension(:) :: y
-    character(len=100), intent(out) :: msg
-    real(8) :: q_negative_sum, q_positive_sum
+    use microphysics_common, only: cv_mixture
+    use microphysics_constants, only: L_v => L_cond, L_s => L_subl , L_f => L_fusi
 
-    q_negative_sum = sum(y(3:), mask = y(3:) < 0.0_kreal)
-    q_positive_sum = sum(y(3:), mask = y(3:) >= 0.0_kreal)
+    real(kreal), intent(inout), dimension(:) :: y
+    character(len=100), intent(out) :: msg
+    real(kreal) :: q_negative_sum, q_positive_sum
+    real(kreal), dimension(size(y)) :: y_old
+    real(kreal) :: c_m
+    integer :: j
+    integer, dimension(size(y)) :: y_negative_species_mask, y_positive_species_mask
+
+    !solid_species = (/ 0, 0, 0, 0, 0, 1, 1/)
+    !liquid_species = (/ 0, 0, 1, 1, 0, 0, 0/)
+    !gas_species = (/ 0, 0, 0, 0, 1, 0, 0/)
+
+    c_m = cv_mixture(y)
 
     if (q_negative_sum < -1.0_kreal) then
       msg = "failed to scale mass"
       return
     endif
 
-    where (y(3:) < 0.0_kreal)
-      y(3:) = 0.0_kreal
-    elsewhere
-      y(3:) = y(3:) + y(3:) * q_negative_sum / q_positive_sum
-    endwhere
+    y_negative_species_mask = y(3:) * merge(1,0,y(3:) <  0.0_kreal)
+    y_positive_species_mask = y(3:) * merge(1,0,y(3:) >= 0.0_kreal)
+
+    do j = 3, size(y)
+
+       q_negative_sum = sum(y(3:), mask = y(3:) < 0.0_kreal)
+       q_positive_sum = sum(y(3:), mask = y(3:) >= 0.0_kreal)
+
+       if (y(j) < 0.0_kreal) then
+         y_old = y
+         where (y(3:) < 0.0_kreal)
+           y(3:) = 0.0_kreal
+         elsewhere
+           y(3:) = y(3:) * (1.0_kreal + y(j) / q_positive_sum)
+         endwhere
+
+         y(j) = 0.0_kreal
+
+         ! Temperature corrections
+         if (j==5) then
+           y(1) = y(1) &
+                 + L_v/c_m*(y(3) - y_old(3) + y(4) - y_old(4)) &
+                 + L_s/c_m*(y(6) - y_old(6) + y(7) - y_old(7))
+         endif
+
+         if (j==3 .or. j==4) then
+           y(1) = y(1) &
+                 - L_v/c_m*(y(5) - y_old(5)) &
+                 + L_f/c_m*(y(6) - y_old(6) + y(7) - y_old(7))
+         endif
+
+         if (j==6 .or. j==7) then
+           y(1) = y(1) &
+                 - L_s/c_m*(y(5) - y_old(5)) &
+                 - L_f/c_m*(y(3) - y_old(3) + y(4) - y_old(4))
+         endif
+       endif
+    end do
+
   end subroutine
+
+  ! subroutine mass_scale(y, msg)
+  !
+  !   real(8), intent(inout), dimension(:) :: y
+  !   character(len=100), intent(out) :: msg
+  !   real(8) :: q_negative_sum, q_positive_sum
+  !
+  !   q_negative_sum = sum(y(3:), mask = y(3:) < 0.0_kreal)
+  !   q_positive_sum = sum(y(3:), mask = y(3:) >= 0.0_kreal)
+  !
+  !   if (q_negative_sum < -1.0_kreal) then
+  !        msg = "failed to scale mass"
+  !        return
+  !      endif
+  !
+  !   where (y(3:) < 0.0_kreal)
+  !     y(3:) = 0.0_kreal
+  !   elsewhere
+  !     y(3:) = y(3:) + y(3:) * q_negative_sum / q_positive_sum
+  !   endwhere
+  ! end subroutine
 
   subroutine mass_scale_no_msg(y)
 
@@ -327,15 +392,15 @@ contains
       y_n1 = fix_y_isometric(y, c1_1*k1 + c2_1*k2 + c3_1*k3 + c4_1*k4 + c5_1*k5, .false.)
       y_n2 = fix_y_isometric(y, c1_2*k1 + c2_2*k2 + c3_2*k3 + c4_2*k4 + c5_2*k5, .false.)
 
-      ! if (any(isnan(y_n2))) then
-      !   print *, y_n2
-      ! endif
+       ! if (any(isnan(y_n2))) then
+       !   ! for debug
+       ! endif
 
       abs_err = abs(y_n1 - y_n2)
       !abs_err = abs(1./6.*(k4 - k5))
 
       max_total_err = (abs_tol + rel_tol*abs(y_n2))
-      s = 0.84*(minval(max_total_err * dt / abs_err, abs_err > 0.0_kreal))**0.25
+      s = 0.84*(minval(max_total_err * dt / abs_err, abs_err > 0.0_kreal))**0.1
 
       ! if (t > 3380.0_kreal) then
       !   print *, "dt"
@@ -363,10 +428,10 @@ contains
 
         ! Check if s is large
         ! Large s suggests the current or a bigger timestep can be taken
-        if (s > 1.0) then
-          msg = "s was huge"
-          done = .true.
-        endif
+        ! if (s > 1.0) then
+        !   msg = "s was huge"
+        !   done = .true.
+        ! endif
 
       endif
 

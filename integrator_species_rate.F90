@@ -1,6 +1,7 @@
 module integrator_species_rate
   use mphys_with_ice
   use microphysics_common, only: cv_mixture, cp_mixture
+  use integrator_config, only: ice_graupel_processes
 
   implicit none
 
@@ -52,34 +53,49 @@ module integrator_species_rate
 
        ! compute heat capacity of mixture
        c_m = cv_mixture(y)
-       c_p = cp_mixture(y)
 
        ! compute time derivatives for each process TODO: Functions for each function
 
-       dqldt_condevap = dql_dt__condensation_evaporation(rho=rho, rho_g=rho_g, qv=qv, ql=ql, T=temp, p=p)
-       dqrdt_condevap = dqr_dt__condensation_evaporation(qv=qv, qr=qr, rho=rho, T=temp, p=p)
-       dqhdt_condevap = dqh_dt__condensation_evaporation(qv=qv, qh=qh, rho=rho, T=temp, p=p)
-       dqidt_sublidep = dqi_dt__sublimation_deposition(qi=qi, rho=rho, T=temp, p=p)
-       dqhdt_sublidep = dqh_dt__sublimation_evaporation(qg=qg, qv=qv, qh=qh, rho=rho, T=temp, p=p)
-       dqrdt_autoconv = dqr_dt__autoconversion(ql=ql, qg=qg, rho_g=rho_g, T=temp)
-       dqhdt_autoconv = dqh_dt__autoconversion_ice_graupel(qi=qi, qg=qg, rho_g=rho_g, T=temp)
-       dqrdt_accre_rc = dqr_dt__accretion_cloud_rain(ql=ql, rho_g=rho_g, rho=rho, qr=qr)
-       dqhdt_accre_hi = dqh_dt__accretion_ice_graupel(qi=qi, rho_g=rho_g, qh=qh, T=temp)
-       dqldt_accre_chr= dqh_dt__accretion_cloud_graupel_rain(ql=ql, rho_g=rho_g, rho=rho, qh=qh, T=temp, qr=qr)
-       dqhdt_accre_hiri= dqr_dt__accretion_ice_rain_graupel_i(qi=qi, rho_g=rho_g, rho=rho, qr=qr)
-       dqhdt_accre_hirr= dqr_dt__accretion_ice_rain_graupel_r(qi=qi, ql=ql, rho=rho, rho_g=rho_g, qr=qr)
-       dqhdt_accre_hr = dqr_dt__accretion_graupel(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr)
-       dqrdt_melt_rh  = dqr_dt__melting_graupel(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr, ql=ql)
-       dqldt_melt_ci  = dqr_dt__melting_ice(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr, ql=ql, qi=qi)
-       dqhdt_freeze   = dqh_dt__freezing_graupel(qh=qh, rho=rho, T=temp, qr=qr)
-       dqidt_freeze   = dqi_dt__freezing_ice(ql=ql, rho=rho, T=temp)
+       if (ice_graupel_processes) then
+         dqldt_condevap = dql_dt__condensation_evaporation(rho=rho, rho_g=rho_g, qv=qv, ql=ql, T=temp, p=p)
+         dqrdt_condevap = dqr_dt__condensation_evaporation(qv=qv, qr=qr, rho=rho, T=temp, p=p)
+         dqhdt_condevap = dqh_dt__condensation_evaporation(qv=qv, qh=qh, rho=rho, T=temp, p=p)
+         dqidt_sublidep = dqi_dt__sublimation_deposition(qi=qi, qv=qv, rho=rho, T=temp, p=p)
+         dqhdt_sublidep = dqh_dt__sublimation_evaporation(qg=qg, qv=qv, qh=qh, rho=rho, T=temp, p=p)
+         dqrdt_autoconv = dqr_dt__autoconversion(ql=ql, qg=qg, rho_g=rho_g, T=temp, qv=qv, rho=rho)
+         dqhdt_autoconv = dqh_dt__autoconversion_ice_graupel(qi=qi, qg=qg, rho_g=rho_g, T=temp)
+         dqrdt_accre_rc = dqr_dt__accretion_cloud_rain(ql=ql, rho_g=rho_g, rho=rho, qr=qr)
+         dqhdt_accre_hi = dqh_dt__accretion_ice_graupel(qi=qi, rho_g=rho_g, qh=qh, T=temp)
+         dqldt_accre_chr= dqh_dt__accretion_cloud_graupel_rain(ql=ql, rho_g=rho_g, rho=rho, qh=qh, T=temp, qr=qr)
+         dqhdt_accre_hiri= dqr_dt__accretion_ice_rain_graupel_i(qi=qi, rho_g=rho_g, rho=rho, qr=qr)
+         dqhdt_accre_hirr= dqr_dt__accretion_ice_rain_graupel_r(qi=qi, ql=ql, rho=rho, rho_g=rho_g, qr=qr, T=temp)
+         dqhdt_accre_hr = dqr_dt__accretion_graupel(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr, ql=ql)
+         dqrdt_melt_rh  = dqr_dt__melting_graupel(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr, ql=ql)
+         dqldt_melt_ci  = dqr_dt__melting_ice(qg=qg, rho_g=rho_g, qv=qv, qh=qh, rho=rho, T=temp, p=p, qr=qr, ql=ql, qi=qi)
+         dqhdt_freeze   = dqh_dt__freezing_graupel(qh=qh, rho=rho, T=temp, qr=qr)
+         dqidt_freeze   = dqi_dt__freezing_ice(ql=ql, rho=rho, T=temp, qv=qv, p=p)
+       else
+         dqldt_condevap = dql_dt__condensation_evaporation(rho=rho, rho_g=rho_g, qv=qv, ql=ql, T=temp, p=p)
+         dqrdt_condevap = dqr_dt__condensation_evaporation(qv=qv, qr=qr, rho=rho, T=temp, p=p)
+         dqhdt_condevap = 0.0_kreal
+         dqidt_sublidep = 0.0_kreal
+         dqhdt_sublidep = 0.0_kreal
+         dqrdt_autoconv = dqr_dt__autoconversion(ql=ql, qg=qg, rho_g=rho_g, T=temp, qv=qv, rho=rho)
+         dqhdt_autoconv = 0.0_kreal
+         dqrdt_accre_rc = dqr_dt__accretion_cloud_rain(ql=ql, rho_g=rho_g, rho=rho, qr=qr)
+         dqhdt_accre_hi = 0.0_kreal
+         dqldt_accre_chr= 0.0_kreal
+         dqhdt_accre_hiri= 0.0_kreal
+         dqhdt_accre_hirr= 0.0_kreal
+         dqhdt_accre_hr = 0.0_kreal
+         dqrdt_melt_rh  = 0.0_kreal
+         dqldt_melt_ci  = 0.0_kreal
+         dqhdt_freeze   = 0.0_kreal
+         dqidt_freeze   = 0.0_kreal
+       endif
 
        ! combine to create time derivatives for species
 
-
-       ! if (dqidt_freeze > 0.0_kreal) then
-       !   print *, dqidt_freeze
-       ! endif
        if (temp > temp0) then
 
          dydt(3) =  dqldt_condevap - dqrdt_autoconv &
@@ -112,6 +128,7 @@ module integrator_species_rate
                   + dqldt_melt_ci &
 
                   - dqidt_freeze
+
          dydt(4) =  dqrdt_condevap + dqrdt_autoconv &
                   + dqrdt_accre_rc - dqhdt_accre_hirr &
                   + dqrdt_melt_rh &
@@ -132,7 +149,7 @@ module integrator_species_rate
 
                   + dqhdt_freeze &
                   + dqldt_accre_chr + dqhdt_accre_hr
-
+         !print *,  dqhdt_accre_hirr
 
          dydt(1) = & !(y(2)/100000._kreal)**(0.28591_kreal) * &
                   (L_v/c_m*(dqldt_condevap + dqrdt_condevap + dqhdt_condevap) &
